@@ -1,32 +1,66 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+
+# XeemoApp Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### I. Clean Architecture
+All code MUST adhere to Clean Architecture principles: business logic is isolated from frameworks, UI, and infrastructure. Dependencies always point inward. Each layer has a clear, testable contract. No direct data access or framework calls from business logic.
+**Rationale**: Ensures maintainability, testability, and adaptability to change.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. UI/Logic Separation
+UI components MUST NOT contain business logic. All business rules, state management, and data access are implemented in dedicated logic/service layers. UI is responsible only for presentation and user interaction.
+**Rationale**: Prevents code duplication, simplifies testing, and enables UI reuse across platforms.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+
+### III. Role-Based Access Control (RBAC) Security
+All access to sensitive features and data MUST be governed by explicit RBAC policies. Every endpoint, service, and UI action MUST check user roles/permissions before proceeding. RBAC rules are centrally defined and auditable.
+**Rationale**: Protects user data, enforces least privilege, and supports compliance.
+
+
+### IV. Reusable Widget Components
+UI widgets/components MUST be designed for reuse across screens and features. Widgets expose clear props/inputs, emit events, and avoid hardcoded dependencies. Shared components are documented and tested in isolation.
+**Rationale**: Reduces duplication, accelerates development, and ensures consistent UX.
+
+
+## Additional Constraints
+
+- All code reviews MUST verify compliance with the above principles.
+- Technology choices and project structure MUST support clean separation and RBAC enforcement.
+- All reusable widgets/components MUST be discoverable in a shared library or directory.
+
+## Development Workflow
+
+- All features begin with a clear plan and specification referencing these principles.
+- Tasks are grouped by user story and mapped to architecture layers (UI, logic, data, security).
+- Security and access control tasks are mandatory for all sensitive features.
+- Widget/component tasks are tracked for reusability and documentation.
+
+## Governance
+This constitution supersedes all other development practices for XeemoApp. Amendments require:
+- Documentation of proposed changes
+- Approval by project maintainers
+- Migration plan for any breaking changes
+
+All PRs and reviews MUST verify compliance with these principles. Complexity and exceptions MUST be justified in the implementation plan. Use this constitution as the reference for runtime and development guidance.
+
+**Version**: 1.0.0 | **Ratified**: 2026-01-29 | **Last Amended**: 2026-01-29
+
+<!--
+Sync Impact Report
+------------------
+Version change: (template) → 1.0.0
+Modified principles: All (template replaced with Clean Architecture, UI/Logic Separation, RBAC Security, Reusable Widgets)
+Added sections: Additional Constraints, Development Workflow
+Removed sections: None (template placeholders replaced)
+Templates requiring updates:
+	✅ .specify/templates/plan-template.md (Constitution Check: must reference Clean Architecture, UI/Logic Separation, RBAC, Widgets)
+	✅ .specify/templates/spec-template.md (Requirements: must include RBAC/security, widget reuse, separation of concerns)
+	✅ .specify/templates/tasks-template.md (Task types: must include security, widget, and separation tasks)
+	⚠ No command templates found (none to update)
+Follow-up TODOs: None (all placeholders replaced)
+-->
 
 ## [SECTION_2_NAME]
 <!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->

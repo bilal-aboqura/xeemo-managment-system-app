@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Xeemo App (Debug)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "app",
+      "toolArgs": [
+        "--dart-define=SUPABASE_URL=https://ootxctnlnajwwszgdcrf.supabase.co",
+        "--dart-define=SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vdHhjdG5sbmFqd3dzemdkY3JmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3MDE0NDgsImV4cCI6MjA4NTI3NzQ0OH0.WYbsLeYU2M1ZANmrRVcWTUC-FDHn6ghncG8pPnvJwX4"
+      ]
+    },
+    {
+      "name": "Xeemo App (Profile)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "app",
+      "flutterMode": "profile",
+      "toolArgs": [
+        "--dart-define=SUPABASE_URL=https://ootxctnlnajwwszgdcrf.supabase.co",
+        "--dart-define=SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vdHhjdG5sbmFqd3dzemdkY3JmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3MDE0NDgsImV4cCI6MjA4NTI3NzQ0OH0.WYbsLeYU2M1ZANmrRVcWTUC-FDHn6ghncG8pPnvJwX4"
+      ]
+    },
+    {
+      "name": "Xeemo App (Release)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "app",
+      "flutterMode": "release",
+      "toolArgs": [
+        "--dart-define=SUPABASE_URL=https://ootxctnlnajwwszgdcrf.supabase.co",
+        "--dart-define=SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vdHhjdG5sbmFqd3dzemdkY3JmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3MDE0NDgsImV4cCI6MjA4NTI3NzQ0OH0.WYbsLeYU2M1ZANmrRVcWTUC-FDHn6ghncG8pPnvJwX4"
+      ]
+    }
+  ]
+}
