@@ -9,6 +9,8 @@ enum UserRole {
   worker,
   @JsonValue('manager')
   manager,
+  @JsonValue('super_manager')
+  superManager,
 }
 
 /// User model representing a user in the system
@@ -20,16 +22,16 @@ class User with _$User {
   const factory User({
     /// Unique identifier for the user (UUID from Supabase)
     required String userId,
-    
+
     /// User's display name
     required String name,
-    
+
     /// User's email address
     required String email,
-    
-    /// User's role (worker or manager)
+
+    /// User's role (worker, manager, or super_manager)
     required UserRole role,
-    
+
     /// When the user profile was created
     DateTime? createdAt,
   }) = _User;
@@ -38,7 +40,11 @@ class User with _$User {
 
   /// Check if the user is a worker
   bool get isWorker => role == UserRole.worker;
-  
-  /// Check if the user is a manager
-  bool get isManager => role == UserRole.manager;
+
+  /// Check if the user is a manager (includes super_manager)
+  bool get isManager =>
+      role == UserRole.manager || role == UserRole.superManager;
+
+  /// Check if the user is a super manager (admin)
+  bool get isSuperManager => role == UserRole.superManager;
 }

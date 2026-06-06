@@ -5,10 +5,11 @@ part 'product_model.g.dart';
 
 /// Product model representing a product that can be added to sales tickets
 @freezed
+@JsonSerializable(fieldRename: FieldRename.snake)
 class Product with _$Product {
   const factory Product({
     /// Unique identifier for the product (UUID)
-    @JsonKey(name: 'product_id') required String productId,
+    required String productId,
 
     /// Product name (must be unique)
     required String name,
@@ -20,10 +21,13 @@ class Product with _$Product {
     @Default('') String details,
 
     /// When the product was created
-    @JsonKey(name: 'created_at') DateTime? createdAt,
+    DateTime? createdAt,
 
     /// When the product was last updated
-    @JsonKey(name: 'updated_at') DateTime? updatedAt,
+    DateTime? updatedAt,
+
+    /// Sort order index
+    @Default(0) int sortOrder,
   }) = _Product;
 
   factory Product.fromJson(Map<String, dynamic> json) =>

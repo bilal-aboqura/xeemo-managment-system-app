@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../models/sales_ticket_model.dart';
 import '../providers/auth_provider.dart';
 import '../providers/ticket_provider.dart';
+import '../services/excel_export_service.dart';
+import '../widgets/worker_stats_widget.dart';
 import '../core/theme.dart';
 
 /// Screen for managers to view and export tickets
@@ -31,37 +34,7 @@ class _TicketsDashboardScreenState
     });
   }
 
-  void _exportTickets() async {
-    try {
-      final path = await ref
-          .read(ticketsProvider.notifier)
-          .exportTicketsToExcel();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('تم التصدير إلى: $path'),
-            action: SnackBarAction(
-              label: 'مشاركة',
-              onPressed: () {
-                // TODO: Implement share functionality
-              },
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('فشل التصدير: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _selectDateRange() async {
+  Future<void> _pickDateRange() async {
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2024),
@@ -78,12 +51,9 @@ class _TicketsDashboardScreenState
 
   List<SalesTicket> _getFilteredTickets(List<SalesTicket> allTickets) {
     return allTickets.where((ticket) {
-      // Filter by status
       if (_filterStatus != null && ticket.status != _filterStatus) {
         return false;
       }
-
-      // Filter by date
       if (_dateRange != null) {
         if (ticket.createdAt.isBefore(_dateRange!.start) ||
             ticket.createdAt.isAfter(
@@ -92,293 +62,489 @@ class _TicketsDashboardScreenState
           return false;
         }
       }
-
       return true;
     }).toList();
+  }
+
+  Map<String, dynamic> _calculateStats(List<SalesTicket> tickets) {
+    double total = 0;
+    for (var t in tickets) {
+      total += t.saleAmount;
+    }
+    return {'count': tickets.length, 'total': total};
   }
 
   @override
   Widget build(BuildContext context) {
     final ticketsState = ref.watch(ticketsProvider);
-    final tickets = _getFilteredTickets(ticketsState.tickets);
-    final colorScheme = Theme.of(context).colorScheme;
+    final filteredTickets = _getFilteredTickets(ticketsState.tickets);
+    final stats = _calculateStats(filteredTickets);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('لوحة التذاكر'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.inventory_2_outlined),
-            tooltip: 'المنتجات',
-            onPressed: () => context.go('/products'),
+      backgroundColor: const Color(0xFFF9FAFB),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(110),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color.fromARGB(255, 141, 17, 17), Color(0xFF6E0A0A)],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(24),
+              bottomRight: Radius.circular(24),
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              ref.read(authProvider.notifier).signOut();
-              context.go('/login');
-            },
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 8.0,
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    'لوحة متابعة الزيارات',
+                    style: GoogleFonts.cairo(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const Spacer(),
+
+                  IconButton(
+                    icon: const Icon(Icons.logout, color: Colors.white),
+                    onPressed: () {
+                      ref.read(authProvider.notifier).signOut();
+                      context.go('/login');
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
-        ],
+        ),
       ),
-      body: Column(
-        children: [
-          // Filters
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: colorScheme.surface,
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(ticketsProvider.notifier).loadAllTickets();
+        },
+        color: AppTheme.primaryRed,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Quick Actions
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _ActionButton(
+                        icon: Icons.badge_outlined,
+                        label: 'المناديب',
+                        color: Colors.blue,
+                        onTap: () => context.push('/worker-list'),
+                      ),
+                      if (ref.watch(currentUserProvider)?.isSuperManager ==
+                          true) ...[
+                        const SizedBox(width: 12),
+                        _ActionButton(
+                          icon: Icons.inventory_2_outlined,
+                          label: 'المنتجات',
+                          color: AppTheme.primaryRed,
+                          onTap: () => context.push('/products'),
+                        ),
+                        const SizedBox(width: 12),
+                        _ActionButton(
+                          icon: Icons.people_outline,
+                          label: 'التعيينات',
+                          color: Colors.purple,
+                          onTap: () => context.push('/manager-assignments'),
+                        ),
+                        const SizedBox(width: 12),
+                        _ActionButton(
+                          icon: Icons.supervisor_account_outlined,
+                          label: 'المديرين',
+                          color: Colors.teal,
+                          onTap: () => context.push('/manager-list'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Filter & Export Section
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.date_range),
-                        label: Text(
-                          _dateRange == null
-                              ? 'تصفية حسب التاريخ'
-                              : '${DateFormat('MM/dd').format(_dateRange!.start)} - ${DateFormat('MM/dd').format(_dateRange!.end)}',
+                      flex: 2,
+                      child: Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                          border: Border.all(color: Colors.grey.shade200),
                         ),
-                        onPressed: _selectDateRange,
+                        child: InkWell(
+                          onTap: _pickDateRange,
+                          borderRadius: BorderRadius.circular(16),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16.0,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today,
+                                  color: AppTheme.primaryRed,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _dateRange != null
+                                        ? '${DateFormat('MM/dd').format(_dateRange!.start)} - ${DateFormat('MM/dd').format(_dateRange!.end)}'
+                                        : 'تصفية حسب التاريخ',
+                                    style: GoogleFonts.cairo(
+                                      color: _dateRange != null
+                                          ? AppTheme.primaryRed
+                                          : Colors.grey.shade600,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (_dateRange != null)
+                                  GestureDetector(
+                                    onTap: () =>
+                                        setState(() => _dateRange = null),
+                                    child: Icon(
+                                      Icons.close,
+                                      size: 18,
+                                      color: Colors.grey.shade400,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    if (_dateRange != null)
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => setState(() => _dateRange = null),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 1,
+                      child: SizedBox(
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            try {
+                              if (!mounted) return;
+                              showDialog(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (ctx) => const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                              final path = await ExcelExportService()
+                                  .exportTicketsToExcel(filteredTickets);
+                              if (!mounted) return;
+                              Navigator.pop(context); // Close loading
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'تم التصدير: $path',
+                                    style: GoogleFonts.cairo(),
+                                  ),
+                                  action: SnackBarAction(
+                                    label: 'مشاركة',
+                                    onPressed: () =>
+                                        ExcelExportService().shareFile(path),
+                                  ),
+                                ),
+                              );
+                              await ExcelExportService().shareFile(path);
+                            } catch (e) {
+                              // Close loading dialog if open
+                              if (!mounted) return;
+                              if (Navigator.canPop(context)) {
+                                Navigator.pop(context);
+                              }
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'فشل التصدير: $e',
+                                    style: GoogleFonts.cairo(),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1F2937),
+                            foregroundColor: Colors.white,
+                            elevation: 4,
+                            shadowColor: const Color(
+                              0xFF1F2937,
+                            ).withValues(alpha: 0.4),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: EdgeInsets.zero,
+                          ),
+                          icon: const Icon(Icons.download, size: 20),
+                          label: Text(
+                            'تصدير',
+                            style: GoogleFonts.cairo(
+                              fontWeight: FontWeight.bold,
+                              height: 1.2,
+                            ),
+                          ),
+                        ),
                       ),
-                    const SizedBox(width: 16),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.download),
-                      label: const Text('تصدير'),
-                      onPressed: tickets.isEmpty ? null : _exportTickets,
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 40,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
+
+                const SizedBox(height: 24),
+
+                // Stats Cards
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StatCard(
+                        title: 'الزيارات',
+                        value: stats['count'].toString(),
+                        icon: Icons.directions_walk_rounded,
+                        color: Colors.blue,
+                        isCurrency: false,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _StatCard(
+                        title: 'الإجمالي',
+                        value: stats['total'].toString(),
+                        icon: Icons.currency_pound_rounded,
+                        color: Colors.green,
+                        isCurrency: true,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
+
+                // Worker Stats Widget
+                WorkerStatsWidget(tickets: filteredTickets),
+
+                // List Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: Row(
                     children: [
-                      _StatusFilterChip(
-                        label: 'الكل',
-                        isSelected: _filterStatus == null,
-                        onSelected: (selected) {
-                          if (selected) setState(() => _filterStatus = null);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      // _StatusFilterChip(
-                      //   label: 'المسودة',
-                      //   status: TicketStatus.draft,
-                      //   isSelected: _filterStatus == TicketStatus.draft,
-                      //   onSelected: (s) => setState(() => _filterStatus = s ? TicketStatus.draft : null),
-                      // ),
-                      // const SizedBox(width: 8),
-                      _StatusFilterChip(
-                        label: 'قيد الانتظار',
-                        status: TicketStatus.queued,
-                        isSelected: _filterStatus == TicketStatus.queued,
-                        onSelected: (s) => setState(
-                          () => _filterStatus = s ? TicketStatus.queued : null,
+                      Text(
+                        'أحدث التذاكر',
+                        style: GoogleFonts.cairo(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF1F2937),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      _StatusFilterChip(
-                        label: 'تم الإرسال',
-                        status: TicketStatus.submitted,
-                        isSelected: _filterStatus == TicketStatus.submitted,
-                        onSelected: (s) => setState(
-                          () =>
-                              _filterStatus = s ? TicketStatus.submitted : null,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _StatusFilterChip(
-                        label: 'فشل',
-                        status: TicketStatus.failed,
-                        isSelected: _filterStatus == TicketStatus.failed,
-                        onSelected: (s) => setState(
-                          () => _filterStatus = s ? TicketStatus.failed : null,
+                      const Spacer(),
+                      Text(
+                        '${filteredTickets.length} تذكرة',
+                        style: GoogleFonts.cairo(
+                          fontSize: 14,
+                          color: Colors.grey.shade500,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 12),
+
+                // Ticket List
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: filteredTickets.length,
+                  itemBuilder: (context, index) {
+                    final ticket = filteredTickets[index];
+                    return _TicketCard(ticket: ticket);
+                  },
+                ),
+                const SizedBox(height: 40),
               ],
             ),
           ),
-
-          // Stats
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                _StatCard(
-                  label: 'التذاكر',
-                  value: tickets.length.toString(),
-                  icon: Icons.receipt_long,
-                  color: Colors.blue,
-                ),
-                const SizedBox(width: 16),
-                _StatCard(
-                  label: 'الإجمالي',
-                  value: CurrencyFormatter.formatEGP(
-                    tickets.fold(0, (sum, t) => sum + t.saleAmount),
-                  ),
-                  icon: Icons.attach_money,
-                  color: Colors.green,
-                ),
-              ],
-            ),
-          ),
-
-          // List
-          Expanded(
-            child: ticketsState.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : tickets.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inbox,
-                          size: 64,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _dateRange != null || _filterStatus != null
-                              ? 'لا توجد تذاكر تطابق عامل التصفية'
-                              : 'لا توجد تذاكر حتى الآن',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
-                        ),
-                        if (_dateRange == null && _filterStatus == null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              'ستظهر التذاكر التي ينشئها الموظفون هنا',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: () async {
-                      await ref.read(ticketsProvider.notifier).loadAllTickets();
-                    },
-                    child: ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 80),
-                      itemCount: tickets.length,
-                      itemBuilder: (context, index) {
-                        final ticket = tickets[index];
-                        return _TicketCard(ticket: ticket);
-                      },
-                    ),
-                  ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _StatusFilterChip extends StatelessWidget {
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
   final String label;
-  final TicketStatus? status;
-  final bool isSelected;
-  final Function(bool) onSelected;
+  final Color color;
+  final VoidCallback onTap;
 
-  const _StatusFilterChip({
+  const _ActionButton({
+    required this.icon,
     required this.label,
-    this.status,
-    required this.isSelected,
-    required this.onSelected,
+    required this.color,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: onSelected,
-      selectedColor: status == null
-          ? Theme.of(context).colorScheme.primaryContainer
-          : _getStatusColor(status!).withValues(alpha: 0.3),
-      checkmarkColor: status == null
-          ? Theme.of(context).colorScheme.primary
-          : _getStatusColor(status!),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: GoogleFonts.cairo(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
-  }
-
-  Color _getStatusColor(TicketStatus status) {
-    switch (status) {
-      case TicketStatus.draft:
-        return Colors.grey;
-      case TicketStatus.queued:
-        return Colors.orange;
-      case TicketStatus.submitted:
-        return Colors.green;
-      case TicketStatus.failed:
-        return Colors.red;
-    }
   }
 }
 
 class _StatCard extends StatelessWidget {
-  final String label;
+  final String title;
   final String value;
   final IconData icon;
-  final Color color;
+  final MaterialColor color;
+  final bool isCurrency;
 
   const _StatCard({
-    required this.label,
+    required this.title,
     required this.value,
     required this.icon,
     required this.color,
+    required this.isCurrency,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Card(
-        elevation: 2,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(icon, color: color, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: color.shade50,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: color.shade700, size: 24),
+              ),
+              if (isCurrency)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'EGP',
+                    style: GoogleFonts.cairo(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green.shade700,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: color,
                 ),
-              ),
             ],
           ),
-        ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: GoogleFonts.cairo(
+              color: Colors.grey.shade500,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              isCurrency
+                  ? CurrencyFormatter.formatEGP(
+                      double.parse(value),
+                    ).replaceAll(' ج.م', '')
+                  : value,
+              style: GoogleFonts.cairo(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF1F2937),
+                height: 1.1,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -391,181 +557,144 @@ class _TicketCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('MMM d, h:mm a');
-    final colorScheme = Theme.of(context).colorScheme;
+    final dateFormat = DateFormat('h:mm a', 'ar');
+    final dateString = dateFormat.format(ticket.createdAt);
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: InkWell(
-        onTap: () => context.push('/ticket/${ticket.ticketId}'),
-        borderRadius: BorderRadius.circular(12),
-        child: ExpansionTile(
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  ticket.clientName,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              _StatusBadge(status: ticket.status),
-            ],
+    // Get initial for avatar
+    final String initial = ticket.clientName.trim().isNotEmpty
+        ? ticket.clientName.trim().substring(0, 1).toUpperCase()
+        : '?';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
           ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
+        ],
+        border: Border.all(color: const Color(0xFFF3F4F6)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => context.push('/ticket/${ticket.ticketId}'),
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Text(dateFormat.format(ticket.createdAt)),
-                const SizedBox(width: 16),
-                Text(
-                  CurrencyFormatter.formatEGP(ticket.saleAmount),
-                  style: TextStyle(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.bold,
+                // Avatar
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppTheme.primaryRed.withValues(alpha: 0.8),
+                        AppTheme.primaryRed,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryRed.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
+                  child: Center(
+                    child: Text(
+                      initial,
+                      style: GoogleFonts.cairo(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+
+                // Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ticket.clientName,
+                        style: GoogleFonts.cairo(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: const Color(0xFF1F2937),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 14,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            dateString,
+                            style: GoogleFonts.cairo(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Price & Arrow
+                const SizedBox(width: 8),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF1F2), // Light red bg
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFFE4E6)),
+                      ),
+                      child: Text(
+                        CurrencyFormatter.formatEGP(ticket.saleAmount),
+                        style: GoogleFonts.cairo(
+                          color: const Color(0xFFBE123C), // Dark red text
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: Colors.grey.shade300,
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _DetailRow(
-                    icon: Icons.phone,
-                    label: 'الهاتف',
-                    value: ticket.clientPhone,
-                  ),
-                  if (ticket.workerNotes.isNotEmpty)
-                    _DetailRow(
-                      icon: Icons.note,
-                      label: 'ملاحظات الموظف',
-                      value: ticket.workerNotes,
-                    ),
-                  if (ticket.clientNotes.isNotEmpty)
-                    _DetailRow(
-                      icon: Icons.comment,
-                      label: 'ملاحظات العميل',
-                      value: ticket.clientNotes,
-                    ),
-                  _DetailRow(
-                    icon: Icons.location_on,
-                    label: 'الموقع',
-                    value:
-                        '${ticket.latitude.toStringAsFixed(5)}, ${ticket.longitude.toStringAsFixed(5)}',
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'المنتجات:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  ...ticket.products.map(
-                    (p) => Padding(
-                      padding: const EdgeInsets.only(left: 16, top: 4),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '• ID: ${p.productId.substring(0, 6)}... (x${p.quantity})',
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final TicketStatus status;
-
-  const _StatusBadge({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    Color color;
-    String text;
-
-    switch (status) {
-      case TicketStatus.draft:
-        color = Colors.grey;
-        text = 'مسودة';
-        break;
-      case TicketStatus.queued:
-        color = Colors.orange;
-        text = 'قيد الانتظار';
-        break;
-      case TicketStatus.submitted:
-        color = Colors.green;
-        text = 'تم الإرسال';
-        break;
-      case TicketStatus.failed:
-        color = Colors.red;
-        text = 'فشل';
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.5)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            icon,
-            size: 16,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '$label: ',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          Expanded(child: Text(value)),
-        ],
       ),
     );
   }

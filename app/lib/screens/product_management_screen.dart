@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/product_model.dart';
@@ -46,24 +47,48 @@ class _ProductManagementScreenState
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('حذف المنتج؟'),
-        content: const Text(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'حذف المنتج؟',
+          style: GoogleFonts.cairo(
+            fontWeight: FontWeight.bold,
+            color: const Color(0xFF1F2937),
+          ),
+        ),
+        content: Text(
           'هل أنت متأكد من حذف هذا المنتج؟ لا يمكن التراجع عن هذا الإجراء.',
+          style: GoogleFonts.cairo(color: const Color(0xFF4B5563)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('إلغاء'),
+            child: Text(
+              'إلغاء',
+              style: GoogleFonts.cairo(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () {
               ref.read(productsProvider.notifier).deleteProduct(productId);
               Navigator.of(context).pop();
             },
-            child: const Text('حذف'),
+            child: Text(
+              'حذف',
+              style: GoogleFonts.cairo(
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
           ),
         ],
       ),
@@ -73,14 +98,59 @@ class _ProductManagementScreenState
   @override
   Widget build(BuildContext context) {
     final productsState = ref.watch(productsProvider);
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('إدارة المنتجات')),
+      backgroundColor: const Color(0xFFF9FAFB),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(80),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color.fromARGB(255, 141, 17, 17), Color(0xFF6E0A0A)],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(24),
+              bottomRight: Radius.circular(24),
+            ),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'إدارة المنتجات',
+                    style: GoogleFonts.cairo(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showAddEditProductDialog(),
-        child: const Icon(Icons.add),
         tooltip: 'إضافة منتج',
+        backgroundColor: AppTheme.primaryRed,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
       body: productsState.isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -91,59 +161,130 @@ class _ProductManagementScreenState
                 children: [
                   Icon(
                     Icons.inventory_2_outlined,
-                    size: 64,
-                    color: colorScheme.onSurfaceVariant,
+                    size: 80,
+                    color: Colors.grey.shade300,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                   Text(
                     'لا توجد منتجات بعد',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                    style: GoogleFonts.cairo(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade500,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                   ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryRed,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                     onPressed: () => _showAddEditProductDialog(),
-                    icon: const Icon(Icons.add),
-                    label: const Text('إضافة منتج'),
+                    icon: const Icon(Icons.add, color: Colors.white),
+                    label: Text(
+                      'إضافة منتج',
+                      style: GoogleFonts.cairo(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
                 ],
               ),
             )
-          : ListView.builder(
-              padding: const EdgeInsets.only(bottom: 80),
+          : ReorderableListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
               itemCount: productsState.products.length,
+              onReorder: (oldIndex, newIndex) {
+                if (newIndex > oldIndex) newIndex--;
+                ref
+                    .read(productsProvider.notifier)
+                    .reorderProduct(oldIndex, newIndex);
+              },
               itemBuilder: (context, index) {
                 final product = productsState.products[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+                return Container(
+                  key: ValueKey(product.productId),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                    border: Border.all(color: const Color(0xFFF3F4F6)),
                   ),
                   child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: colorScheme.primaryContainer,
-                      child: Text(
-                        product.name.substring(0, 1).toUpperCase(),
-                        style: TextStyle(color: colorScheme.onPrimaryContainer),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    leading: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryRed.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Center(
+                        child: Text(
+                          product.name.trim().isEmpty
+                              ? '?'
+                              : product.name
+                                    .trim()
+                                    .substring(0, 1)
+                                    .toUpperCase(),
+                          style: GoogleFonts.cairo(
+                            color: AppTheme.primaryRed,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 20,
+                          ),
+                        ),
                       ),
                     ),
-                    title: Text(product.name),
+                    title: Text(
+                      product.name,
+                      style: GoogleFonts.cairo(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: const Color(0xFF1F2937),
+                      ),
+                    ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        const SizedBox(height: 4),
                         Text(
                           CurrencyFormatter.formatEGP(product.price),
-                          style: TextStyle(
-                            color: colorScheme.primary,
+                          style: GoogleFonts.cairo(
+                            color: AppTheme.primaryRed,
                             fontWeight: FontWeight.bold,
+                            fontSize: 14,
                           ),
                         ),
                         if (product.details.isNotEmpty)
-                          Text(
-                            product.details,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              product.details,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.cairo(
+                                color: Colors.grey.shade500,
+                                fontSize: 13,
+                              ),
+                            ),
                           ),
                       ],
                     ),
@@ -151,12 +292,25 @@ class _ProductManagementScreenState
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.edit),
+                          icon: const Icon(Icons.edit_outlined, size: 20),
+                          color: Colors.blue,
                           onPressed: () => _showAddEditProductDialog(product),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            size: 20,
+                            color: Colors.red,
+                          ),
                           onPressed: () => _deleteProduct(product.productId),
+                        ),
+                        const SizedBox(width: 8),
+                        ReorderableDragStartListener(
+                          index: index,
+                          child: const Icon(
+                            Icons.drag_handle,
+                            color: Colors.grey,
+                          ),
                         ),
                       ],
                     ),
@@ -218,8 +372,36 @@ class _AddEditProductDialogState extends State<_AddEditProductDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final inputDecoration = InputDecoration(
+      filled: true,
+      fillColor: const Color(0xFFF9FAFB),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: AppTheme.primaryRed, width: 1.5),
+      ),
+      labelStyle: GoogleFonts.cairo(color: const Color(0xFF6B7280)),
+      hintStyle: GoogleFonts.cairo(color: const Color(0xFF9CA3AF)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    );
+
     return AlertDialog(
-      title: Text(widget.product == null ? 'إضافة منتج' : 'تعديل منتج'),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(
+        widget.product == null ? 'إضافة منتج' : 'تعديل منتج',
+        style: GoogleFonts.cairo(
+          fontWeight: FontWeight.bold,
+          color: const Color(0xFF1F2937),
+        ),
+      ),
       content: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -228,7 +410,9 @@ class _AddEditProductDialogState extends State<_AddEditProductDialog> {
             children: [
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: 'اسم المنتج *'),
+                textAlign: TextAlign.right,
+                style: GoogleFonts.cairo(color: const Color(0xFF1F2937)),
+                decoration: inputDecoration.copyWith(labelText: 'اسم المنتج *'),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'اسم المنتج مطلوب';
@@ -239,9 +423,14 @@ class _AddEditProductDialogState extends State<_AddEditProductDialog> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _priceController,
-                decoration: const InputDecoration(
+                textAlign: TextAlign.right,
+                style: GoogleFonts.cairo(color: const Color(0xFF1F2937)),
+                decoration: inputDecoration.copyWith(
                   labelText: 'السعر *',
                   suffixText: 'ج.م',
+                  suffixStyle: GoogleFonts.cairo(
+                    color: const Color(0xFF6B7280),
+                  ),
                 ),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
@@ -259,7 +448,9 @@ class _AddEditProductDialogState extends State<_AddEditProductDialog> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _detailsController,
-                decoration: const InputDecoration(labelText: 'التفاصيل'),
+                textAlign: TextAlign.right,
+                style: GoogleFonts.cairo(color: const Color(0xFF1F2937)),
+                decoration: inputDecoration.copyWith(labelText: 'التفاصيل'),
                 maxLines: 3,
               ),
             ],
@@ -269,11 +460,29 @@ class _AddEditProductDialogState extends State<_AddEditProductDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('إلغاء'),
+          child: Text(
+            'إلغاء',
+            style: GoogleFonts.cairo(
+              color: Colors.grey,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
         ElevatedButton(
           onPressed: _submit,
-          child: Text(widget.product == null ? 'إضافة' : 'تحديث'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.primaryRed,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          child: Text(
+            widget.product == null ? 'إضافة' : 'تحديث',
+            style: GoogleFonts.cairo(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
       ],
     );

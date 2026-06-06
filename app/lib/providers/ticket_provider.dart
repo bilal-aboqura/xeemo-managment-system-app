@@ -37,6 +37,8 @@ class TicketsNotifier extends StateNotifier<TicketsState> {
   TicketsNotifier(this._ref) : super(const TicketsState());
 
   /// Load all tickets from database (Manager only)
+  /// - super_manager: sees all tickets
+  /// - manager: sees only tickets from assigned workers
   Future<void> loadAllTickets() async {
     if (!AppConfig.isSupabaseConfigured) {
       SupabaseService.logWarning('Supabase not configured, using mock tickets');
@@ -47,20 +49,62 @@ class TicketsNotifier extends StateNotifier<TicketsState> {
     try {
       state = state.copyWith(isLoading: true, error: null);
 
-      final response = await SupabaseService.client
-          .from('tickets')
-          .select()
-          .order('created_at', ascending: false);
+      final user = _ref.read(currentUserProvider);
+      List<SalesTicket> tickets = [];
 
-      final tickets = (response as List)
-          .map((json) => _parseTicket(json as Map<String, dynamic>))
-          .toList();
+      if (user?.isSuperManager == true) {
+        // Super manager sees all tickets
+        final response = await SupabaseService.client
+            .from('tickets')
+            .select()
+            .order('created_at', ascending: false);
+
+        tickets = (response as List)
+            .map((json) => _parseTicket(json as Map<String, dynamic>))
+            .toList();
+      } else if (user?.isManager == true) {
+        // Regular manager sees only assigned workers' tickets
+        final assignedWorkerIds = await _getAssignedWorkerIds(user!.userId);
+
+        if (assignedWorkerIds.isEmpty) {
+          // No workers assigned, show empty
+          tickets = [];
+        } else {
+          // Fetch tickets from assigned workers
+          final response = await SupabaseService.client
+              .from('tickets')
+              .select()
+              .inFilter('worker_id', assignedWorkerIds)
+              .order('created_at', ascending: false);
+
+          tickets = (response as List)
+              .map((json) => _parseTicket(json as Map<String, dynamic>))
+              .toList();
+        }
+      }
 
       state = TicketsState(tickets: tickets, isLoading: false);
       SupabaseService.logInfo('Loaded ${tickets.length} tickets');
     } catch (e, stackTrace) {
       SupabaseService.logError('Failed to load tickets', e, stackTrace);
       state = TicketsState(error: e.toString(), isLoading: false);
+    }
+  }
+
+  /// Get worker IDs assigned to the current manager
+  Future<List<String>> _getAssignedWorkerIds(String managerId) async {
+    try {
+      final response = await SupabaseService.client
+          .from('manager_worker_assignments')
+          .select('worker_id')
+          .eq('manager_id', managerId);
+
+      return (response as List)
+          .map((row) => row['worker_id'] as String)
+          .toList();
+    } catch (e) {
+      SupabaseService.logError('Failed to get assigned workers', e);
+      return [];
     }
   }
 
@@ -112,27 +156,27 @@ class TicketsNotifier extends StateNotifier<TicketsState> {
     try {
       state = state.copyWith(isLoading: true, error: null);
 
+      // Convert products to JSON-compatible list
+      final productsJson = ticket.products
+          .map((p) => {'productId': p.productId, 'quantity': p.quantity})
+          .toList();
+
       await SupabaseService.client.from('tickets').insert({
         'ticket_id': ticket.ticketId,
         'client_name': ticket.clientName,
         'client_phone': ticket.clientPhone,
+        'laundry_name': ticket.laundryName,
         'worker_notes': ticket.workerNotes,
         'client_notes': ticket.clientNotes,
         'sale_amount': ticket.saleAmount,
         'worker_id': ticket.workerId,
+        'worker_name': ticket.workerName,
         'latitude': ticket.latitude,
         'longitude': ticket.longitude,
         'created_at': ticket.createdAt.toIso8601String(),
+        'status': 'submitted', // Force submitted status
+        'products': productsJson, // Save products to JSONB column
       });
-
-      // Insert ticket products
-      for (final product in ticket.products) {
-        await SupabaseService.client.from('ticket_products').insert({
-          'ticket_id': ticket.ticketId,
-          'product_id': product.productId,
-          'quantity': product.quantity,
-        });
-      }
 
       final submittedTicket = ticket.copyWith(status: TicketStatus.submitted);
       state = state.copyWith(
@@ -154,22 +198,97 @@ class TicketsNotifier extends StateNotifier<TicketsState> {
     return await exportService.exportTicketsToExcel(state.tickets);
   }
 
+  /// Update an existing ticket
+  Future<void> updateTicket(SalesTicket updatedTicket) async {
+    if (!AppConfig.isSupabaseConfigured) {
+      // Update in local state for mock mode
+      final updatedTickets = state.tickets.map((t) {
+        return t.ticketId == updatedTicket.ticketId ? updatedTicket : t;
+      }).toList();
+      state = state.copyWith(tickets: updatedTickets);
+      SupabaseService.logInfo(
+        'Ticket updated (mock): ${updatedTicket.ticketId}',
+      );
+      return;
+    }
+
+    try {
+      state = state.copyWith(isLoading: true, error: null);
+
+      // Convert products to JSON-compatible list
+      final productsJson = updatedTicket.products
+          .map((p) => {'productId': p.productId, 'quantity': p.quantity})
+          .toList();
+
+      await SupabaseService.client
+          .from('tickets')
+          .update({
+            'client_name': updatedTicket.clientName,
+            'client_phone': updatedTicket.clientPhone,
+            'laundry_name': updatedTicket.laundryName,
+            'worker_notes': updatedTicket.workerNotes,
+            'client_notes': updatedTicket.clientNotes,
+            'sale_amount': updatedTicket.saleAmount,
+            'products': productsJson,
+          })
+          .eq('ticket_id', updatedTicket.ticketId);
+
+      // Update local state
+      final updatedTickets = state.tickets.map((t) {
+        return t.ticketId == updatedTicket.ticketId ? updatedTicket : t;
+      }).toList();
+
+      state = state.copyWith(tickets: updatedTickets, isLoading: false);
+      SupabaseService.logInfo('Ticket updated: ${updatedTicket.ticketId}');
+    } catch (e, stackTrace) {
+      SupabaseService.logError('Failed to update ticket', e, stackTrace);
+      state = state.copyWith(error: e.toString(), isLoading: false);
+      rethrow;
+    }
+  }
+
   /// Parse ticket from database response
   SalesTicket _parseTicket(Map<String, dynamic> json) {
+    // Parse products from JSONB
+    List<TicketProductEntry> products = [];
+    if (json['products'] != null) {
+      products = (json['products'] as List).map((p) {
+        return TicketProductEntry(
+          productId: p['productId'] ?? p['product_id'] ?? '',
+          quantity: (p['quantity'] as num?)?.toInt() ?? 0,
+        );
+      }).toList();
+    }
+
     return SalesTicket(
       ticketId: json['ticket_id'] as String,
       clientName: json['client_name'] as String,
       clientPhone: json['client_phone'] as String,
+      laundryName: json['laundry_name'] as String? ?? '',
       workerNotes: json['worker_notes'] as String? ?? '',
       clientNotes: json['client_notes'] as String? ?? '',
       saleAmount: (json['sale_amount'] as num).toDouble(),
       workerId: json['worker_id'] as String,
+      workerName: json['worker_name'] as String? ?? '',
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
       createdAt: DateTime.parse(json['created_at'] as String),
-      status: TicketStatus.submitted,
-      products: [], // Products would need a separate query
+      status: _parseStatus(json['status'] as String?),
+      products: products,
     );
+  }
+
+  TicketStatus _parseStatus(String? status) {
+    switch (status) {
+      case 'submitted':
+        return TicketStatus.submitted;
+      case 'failed':
+        return TicketStatus.failed;
+      case 'queued':
+        return TicketStatus.queued;
+      default:
+        return TicketStatus.draft;
+    }
   }
 
   /// Get mock tickets for development

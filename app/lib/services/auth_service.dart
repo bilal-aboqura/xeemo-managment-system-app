@@ -82,19 +82,30 @@ class AuthService {
         SupabaseService.logInfo(
           'User profile not found, using default worker profile',
         );
+        final email = _client.auth.currentUser?.email ?? '';
+        final name = email.isNotEmpty ? email.split('@').first : 'User';
+
         return app_models.User(
           userId: userId,
-          name: 'User',
-          email: _client.auth.currentUser?.email ?? '',
+          name: name,
+          email: email,
           role: app_models.UserRole.worker,
         );
       }
 
       // Map database response to User model
       final roleString = response['role'] as String? ?? 'worker';
-      final role = roleString == 'manager'
-          ? app_models.UserRole.manager
-          : app_models.UserRole.worker;
+      app_models.UserRole role;
+      switch (roleString) {
+        case 'super_manager':
+          role = app_models.UserRole.superManager;
+          break;
+        case 'manager':
+          role = app_models.UserRole.manager;
+          break;
+        default:
+          role = app_models.UserRole.worker;
+      }
 
       return app_models.User(
         userId: response['user_id'] as String,
@@ -109,10 +120,13 @@ class AuthService {
       SupabaseService.logError('Failed to fetch user profile', e, stackTrace);
 
       // Return a default user if profile fetch fails
+      final email = _client.auth.currentUser?.email ?? '';
+      final name = email.isNotEmpty ? email.split('@').first : 'User';
+
       return app_models.User(
         userId: userId,
-        name: 'User',
-        email: _client.auth.currentUser?.email ?? '',
+        name: name,
+        email: email,
         role: app_models.UserRole.worker,
       );
     }

@@ -24,28 +24,35 @@ enum TicketStatus {
 
 /// Sales ticket model representing a sales transaction
 @freezed
+@JsonSerializable(fieldRename: FieldRename.snake)
 class SalesTicket with _$SalesTicket {
   const factory SalesTicket({
     /// Unique identifier for the ticket (UUID)
-    @JsonKey(name: 'ticket_id') required String ticketId,
+    required String ticketId,
 
     /// Client's name
-    @JsonKey(name: 'client_name') required String clientName,
+    required String clientName,
 
     /// Client's phone number
-    @JsonKey(name: 'client_phone') required String clientPhone,
+    required String clientPhone,
+
+    /// Name of the laundry business
+    @Default('') String laundryName,
 
     /// Notes from the worker
-    @JsonKey(name: 'worker_notes') @Default('') String workerNotes,
+    @Default('') String workerNotes,
 
     /// Notes from the client
-    @JsonKey(name: 'client_notes') @Default('') String clientNotes,
+    @Default('') String clientNotes,
 
     /// Total sale amount
-    @JsonKey(name: 'sale_amount') required double saleAmount,
+    required double saleAmount,
 
     /// ID of the worker who created the ticket
-    @JsonKey(name: 'worker_id') required String workerId,
+    required String workerId,
+
+    /// Name of the worker who created the ticket
+    @Default('') String workerName,
 
     /// List of product IDs with quantities
     required List<TicketProductEntry> products,
@@ -57,7 +64,7 @@ class SalesTicket with _$SalesTicket {
     required double longitude,
 
     /// When the ticket was created
-    @JsonKey(name: 'created_at') required DateTime createdAt,
+    required DateTime createdAt,
 
     /// Current status of the ticket
     @Default(TicketStatus.draft) TicketStatus status,

@@ -37,11 +37,10 @@ class ProductsNotifier extends StateNotifier<ProductsState> {
   /// Load all products from database
   Future<void> loadProducts() async {
     if (!AppConfig.isSupabaseConfigured) {
-      SupabaseService.logWarning('Supabase not configured, using mock products');
-      state = ProductsState(
-        products: _getMockProducts(),
-        isLoading: false,
+      SupabaseService.logWarning(
+        'Supabase not configured, using mock products',
       );
+      state = ProductsState(products: _getMockProducts(), isLoading: false);
       return;
     }
 
@@ -51,6 +50,7 @@ class ProductsNotifier extends StateNotifier<ProductsState> {
       final response = await SupabaseService.client
           .from('products')
           .select()
+          .order('sort_order', ascending: true)
           .order('name');
 
       final products = (response as List)
@@ -61,30 +61,34 @@ class ProductsNotifier extends StateNotifier<ProductsState> {
       SupabaseService.logInfo('Loaded ${products.length} products');
     } catch (e, stackTrace) {
       SupabaseService.logError('Failed to load products', e, stackTrace);
-      state = ProductsState(
-        error: e.toString(),
-        isLoading: false,
-      );
+      state = ProductsState(error: e.toString(), isLoading: false);
     }
   }
 
   /// Add a new product (Manager only)
   Future<void> addProduct(Product product) async {
     if (!AppConfig.isSupabaseConfigured) {
-      state = state.copyWith(
-        products: [...state.products, product],
-      );
+      state = state.copyWith(products: [...state.products, product]);
       return;
     }
 
     try {
       state = state.copyWith(isLoading: true, error: null);
 
+      // Get max sort order to append to the end
+      int maxOrder = 0;
+      if (state.products.isNotEmpty) {
+        maxOrder = state.products
+            .map((p) => p.sortOrder)
+            .reduce((curr, next) => curr > next ? curr : next);
+      }
+
       await SupabaseService.client.from('products').insert({
         'product_id': product.productId,
         'name': product.name,
         'price': product.price,
         'details': product.details,
+        'sort_order': maxOrder + 1,
       });
 
       await loadProducts();
@@ -99,7 +103,9 @@ class ProductsNotifier extends StateNotifier<ProductsState> {
   /// Update an existing product (Manager only)
   Future<void> updateProduct(Product product) async {
     if (!AppConfig.isSupabaseConfigured) {
-      final index = state.products.indexWhere((p) => p.productId == product.productId);
+      final index = state.products.indexWhere(
+        (p) => p.productId == product.productId,
+      );
       if (index != -1) {
         final updated = [...state.products];
         updated[index] = product;
@@ -130,10 +136,41 @@ class ProductsNotifier extends StateNotifier<ProductsState> {
     }
   }
 
+  /// Reorder products
+  Future<void> reorderProduct(int oldIndex, int newIndex) async {
+    final currentProducts = [...state.products];
+    final item = currentProducts.removeAt(oldIndex);
+    currentProducts.insert(newIndex, item);
+
+    // Optimistic update
+    state = state.copyWith(products: currentProducts);
+
+    if (!AppConfig.isSupabaseConfigured) return;
+
+    try {
+      // Update sort_order for all affected items
+      for (int i = 0; i < currentProducts.length; i++) {
+        final product = currentProducts[i];
+        if (product.sortOrder != i) {
+          await SupabaseService.client
+              .from('products')
+              .update({'sort_order': i})
+              .eq('product_id', product.productId);
+        }
+      }
+    } catch (e, stackTrace) {
+      SupabaseService.logError('Failed to reorder products', e, stackTrace);
+      // Revert on error (reload from server)
+      await loadProducts();
+    }
+  }
+
   /// Delete a product (Manager only)
   Future<void> deleteProduct(String productId) async {
     if (!AppConfig.isSupabaseConfigured) {
-      final updated = state.products.where((p) => p.productId != productId).toList();
+      final updated = state.products
+          .where((p) => p.productId != productId)
+          .toList();
       state = state.copyWith(products: updated);
       return;
     }
@@ -163,27 +200,32 @@ class ProductsNotifier extends StateNotifier<ProductsState> {
         name: 'Product A',
         price: 29.99,
         details: 'Sample product A description',
+        sortOrder: 0,
       ),
       Product(
         productId: '2',
         name: 'Product B',
         price: 49.99,
         details: 'Sample product B description',
+        sortOrder: 1,
       ),
       Product(
         productId: '3',
         name: 'Product C',
         price: 99.99,
         details: 'Sample product C description',
+        sortOrder: 2,
       ),
     ];
   }
 }
 
 /// Provider for products state
-final productsProvider = StateNotifierProvider<ProductsNotifier, ProductsState>((ref) {
-  return ProductsNotifier();
-});
+final productsProvider = StateNotifierProvider<ProductsNotifier, ProductsState>(
+  (ref) {
+    return ProductsNotifier();
+  },
+);
 
 /// Provider for product list
 final productListProvider = Provider<List<Product>>((ref) {

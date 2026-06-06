@@ -18,6 +18,7 @@ _$ProductImpl _$$ProductImplFromJson(Map<String, dynamic> json) =>
       updatedAt: json['updated_at'] == null
           ? null
           : DateTime.parse(json['updated_at'] as String),
+      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _$$ProductImplToJson(_$ProductImpl instance) =>
@@ -28,6 +29,7 @@ Map<String, dynamic> _$$ProductImplToJson(_$ProductImpl instance) =>
       'details': instance.details,
       'created_at': instance.createdAt?.toIso8601String(),
       'updated_at': instance.updatedAt?.toIso8601String(),
+      'sort_order': instance.sortOrder,
     };
 
 _$TicketProductImpl _$$TicketProductImplFromJson(Map<String, dynamic> json) =>
