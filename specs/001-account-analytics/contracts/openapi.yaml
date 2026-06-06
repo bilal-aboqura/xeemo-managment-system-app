@@ -1,0 +1,97 @@
+openapi: 3.0.3
+info:
+  title: Xeemo Account & Analytics API
+  version: 1.0.0
+servers:
+  - url: /api
+paths:
+  /users:
+    post:
+      summary: Create a new user (worker/manager)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: User created
+        '400':
+          description: Validation error
+  /users/{id}/analytics:
+    get:
+      summary: Get analytics for a worker
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerAnalyticsList'
+        '404':
+          description: Not found
+components:
+  schemas:
+    UserCreate:
+      type: object
+      required:
+        - name
+        - email
+        - password
+        - role
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [Worker, Manager]
+        assigned_area:
+          type: string
+    WorkerAnalyticsList:
+      type: object
+      properties:
+        analytics:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkerAnalytics'
+    WorkerAnalytics:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        task_completion_rate:
+          type: number
+        activity_hours:
+          type: number
+        productivity_score:
+          type: number
+        login_frequency:
+          type: integer
+        task_types_breakdown:
+          type: object
+        engagement_metrics:
+          type: object
+        performance_trends:
+          type: object

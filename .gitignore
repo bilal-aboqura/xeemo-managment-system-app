@@ -1,0 +1,46 @@
+# Dart/Flutter
+app/.dart_tool/
+app/build/
+app/*.iml
+app/.idea/
+app/.metadata
+app/.packages
+app/.pub-cache/
+app/.pub/
+app/pubspec.lock
+
+# Build outputs
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# IDE
+.vscode/settings.json
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.swp
+*~
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Supabase 
+supabase/.branches/
+supabase/.temp/
+
+# Speckit work
+.specify/memory/
