@@ -8,10 +8,10 @@ class AppTheme {
   // ============================================
 
   /// Primary color - Deep Teal (Legacy of Islamic Art)
-  static const Color primaryTeal = Color(0xFF00695C);
+  static const Color primaryRed = Color.fromARGB(255, 105, 0, 0);
 
   /// Darker Teal for AppBars/Headers
-  static const Color darkTeal = Color(0xFF004D40);
+  static const Color darkRed = Color.fromARGB(255, 77, 0, 0);
 
   /// Light Teal for accents
   static const Color lightTeal = Color(0xFF4DB6AC);
@@ -46,7 +46,7 @@ class AppTheme {
       fontFamily: GoogleFonts.cairo().fontFamily,
 
       colorScheme: const ColorScheme.dark(
-        primary: primaryTeal,
+        primary: primaryRed,
         onPrimary: Colors.white,
         secondary: goldAccent,
         onSecondary: Colors.black,
@@ -79,18 +79,18 @@ class AppTheme {
         shadowColor: Colors.black45,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: Colors.white.withOpacity(0.05)),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
         ),
       ),
 
       // Elevated Buttons - Teal with Gold Glow
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: primaryTeal,
+          backgroundColor: primaryRed,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
           elevation: 6,
-          shadowColor: primaryTeal.withOpacity(0.4),
+          shadowColor: primaryRed.withValues(alpha: 0.4),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -126,7 +126,7 @@ class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -166,7 +166,7 @@ class AppTheme {
 
       // List Tiles
       listTileTheme: ListTileThemeData(
-        tileColor: surfaceColor.withOpacity(0.5),
+        tileColor: surfaceColor.withValues(alpha: 0.5),
         iconColor: goldAccent,
         textColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

@@ -1,301 +1,736 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import '../models/sales_ticket_model.dart';
 import '../providers/ticket_provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/product_provider.dart';
 import '../core/theme.dart';
 
 /// Screen showing full ticket details
-class TicketDetailScreen extends ConsumerWidget {
+class TicketDetailScreen extends ConsumerStatefulWidget {
   final String ticketId;
 
   const TicketDetailScreen({super.key, required this.ticketId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TicketDetailScreen> createState() => _TicketDetailScreenState();
+}
+
+class _TicketDetailScreenState extends ConsumerState<TicketDetailScreen> {
+  String? _address;
+  String? _landmark;
+  bool _isLoadingLocation = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Defer loading to allow provider access
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadLocation();
+      ref.read(productsProvider.notifier).loadProducts();
+    });
+  }
+
+  Future<void> _loadLocation() async {
+    try {
+      final ticketsState = ref.read(ticketsProvider);
+      final ticket = ticketsState.tickets.firstWhere(
+        (t) => t.ticketId == widget.ticketId,
+        orElse: () => throw Exception('Ticket not found'),
+      );
+
+      final placemarks = await placemarkFromCoordinates(
+        ticket.latitude,
+        ticket.longitude,
+      );
+
+      if (placemarks.isNotEmpty) {
+        final place = placemarks.first;
+
+        // Construct landmark (most specific name)
+        String landmark = place.name ?? '';
+        if (landmark == place.street || landmark.isEmpty) {
+          landmark = place.thoroughfare ?? place.subThoroughfare ?? '';
+        }
+
+        // Construct full address
+        final parts =
+            [
+                  place.street,
+                  place.subLocality,
+                  place.locality,
+                  place.administrativeArea,
+                  place.country,
+                ]
+                .where((e) => e != null && e.isNotEmpty)
+                .toSet()
+                .toList(); // toSet to remove duplicates
+
+        if (mounted) {
+          setState(() {
+            _landmark = landmark.isNotEmpty ? landmark : 'معلم غير محدد';
+            _address = parts.join('، ');
+            _isLoadingLocation = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _address = 'العنوان غير متوفر';
+            _isLoadingLocation = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _address = 'تعذر تحديد الموقع بدقة';
+          _isLoadingLocation = false;
+        });
+      }
+      debugPrint('Error getting address: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final ticketsState = ref.watch(ticketsProvider);
     final ticket = ticketsState.tickets.firstWhere(
-      (t) => t.ticketId == ticketId,
+      (t) => t.ticketId == widget.ticketId,
       orElse: () => throw Exception('Ticket not found'),
     );
 
+    final currentUser = ref.watch(currentUserProvider);
+
+    // Determine worker name - use stored name, fallback to current user if same, else fetch from profiles
+    String displayWorkerName = ticket.workerName;
+    if (displayWorkerName.isEmpty &&
+        currentUser != null &&
+        ticket.workerId == currentUser.userId) {
+      displayWorkerName = currentUser.name;
+    }
+
+    // If still empty, try to fetch from profiles table
+    final workerNameAsync = displayWorkerName.isEmpty
+        ? ref.watch(workerNameProvider(ticket.workerId))
+        : null;
+
+    if (displayWorkerName.isEmpty && workerNameAsync != null) {
+      displayWorkerName = workerNameAsync.when(
+        data: (name) => name,
+        loading: () => 'جاري التحميل...',
+        error: (_, __) => 'غير متوفر',
+      );
+    }
+
+    if (displayWorkerName.isEmpty) {
+      displayWorkerName = 'غير متوفر';
+    }
+
+    final productsList = ref.watch(productListProvider);
+    final productsMap = {for (var p in productsList) p.productId: p};
+
     final dateFormat = DateFormat('EEEE، dd MMMM yyyy - hh:mm a', 'ar');
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('تفاصيل التذكرة'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
+      backgroundColor: const Color(0xFFF8F9FA),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(100),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color.fromARGB(255, 141, 17, 17), Color(0xFF6E0A0A)],
+            ),
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(32),
+              bottomRight: Radius.circular(32),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      onPressed: () => context.pop(),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      'تفاصيل الزيارة',
+                      style: GoogleFonts.cairo(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      onPressed: () =>
+                          context.push('/edit-ticket/${widget.ticketId}'),
+                      tooltip: 'تعديل',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Status & Date Header
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _StatusBadge(status: ticket.status),
-                        Text(
-                          '#${ticket.ticketId.substring(0, 8)}',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontFamily: 'monospace',
-                              ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.access_time,
-                          size: 18,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            dateFormat.format(ticket.createdAt),
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 16),
-
-            // Client Info
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'بيانات العميل',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Divider(),
-                    _DetailRow(
-                      icon: Icons.person,
-                      label: 'الاسم',
-                      value: ticket.clientName,
-                    ),
-                    _DetailRow(
-                      icon: Icons.phone,
-                      label: 'الهاتف',
-                      value: ticket.clientPhone,
-                      onTap: () => _launchPhone(ticket.clientPhone),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Location
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'الموقع',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Divider(),
-                    InkWell(
-                      onTap: () =>
-                          _openInMaps(ticket.latitude, ticket.longitude),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: colorScheme.primaryContainer,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                Icons.location_on,
-                                color: colorScheme.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${ticket.latitude.toStringAsFixed(6)}, ${ticket.longitude.toStringAsFixed(6)}',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodyMedium,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'اضغط لفتح في الخريطة',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(color: colorScheme.primary),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.open_in_new,
-                              color: colorScheme.primary,
-                              size: 20,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Notes
-            if (ticket.workerNotes.isNotEmpty || ticket.clientNotes.isNotEmpty)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'الملاحظات',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
+                        '#${ticket.ticketId.substring(0, 8)}',
+                        style: GoogleFonts.cairo(
+                          color: const Color(0xFF6B7280),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
-                      const Divider(),
-                      if (ticket.workerNotes.isNotEmpty) ...[
-                        _NoteSection(
-                          title: 'ملاحظات الموظف',
-                          content: ticket.workerNotes,
-                          icon: Icons.note_alt,
-                        ),
-                        if (ticket.clientNotes.isNotEmpty)
-                          const SizedBox(height: 12),
-                      ],
-                      if (ticket.clientNotes.isNotEmpty)
-                        _NoteSection(
-                          title: 'ملاحظات العميل',
-                          content: ticket.clientNotes,
-                          icon: Icons.comment,
-                        ),
                     ],
                   ),
-                ),
-              ),
-            if (ticket.workerNotes.isNotEmpty || ticket.clientNotes.isNotEmpty)
-              const SizedBox(height: 16),
-
-            // Products (if any)
-            if (ticket.products.isNotEmpty)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 16),
+                  Row(
                     children: [
-                      Text(
-                        'المنتجات',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.access_time_filled,
+                          size: 18,
+                          color: Color(0xFF6B7280),
+                        ),
                       ),
-                      const Divider(),
-                      ...ticket.products.map(
-                        (p) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          dateFormat.format(ticket.createdAt),
+                          style: GoogleFonts.cairo(
+                            fontSize: 14,
+                            color: const Color(0xFF374151),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Client & Worker Info Row
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Client Info
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 15,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'بيانات العميل',
+                            style: GoogleFonts.cairo(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF1F2937),
+                            ),
+                          ),
+                          const Divider(height: 24),
+                          _DetailRow(
+                            icon: Icons.person_outline,
+                            label: 'الاسم',
+                            value: ticket.clientName,
+                            compact: true,
+                          ),
+                          if (ticket.laundryName.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            _DetailRow(
+                              icon: Icons.storefront_outlined,
+                              label: 'المغسلة',
+                              value: ticket.laundryName,
+                              compact: true,
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          _DetailRow(
+                            icon: Icons.phone_outlined,
+                            label: 'الهاتف',
+                            value: ticket.clientPhone,
+                            onTap: () => _launchPhone(ticket.clientPhone),
+                            isAction: true,
+                            compact: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Worker Info
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 15,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'بيانات المندوب',
+                            style: GoogleFonts.cairo(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF1F2937),
+                            ),
+                          ),
+                          const Divider(height: 24),
+                          _DetailRow(
+                            icon: Icons.badge_outlined,
+                            label: 'الاسم',
+                            value: displayWorkerName,
+                            compact: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Products
+            if (ticket.products.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'المنتجات (${ticket.products.length})',
+                      style: GoogleFonts.cairo(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF1F2937),
+                      ),
+                    ),
+                    const Divider(height: 32),
+                    ...ticket.products.map(
+                      (p) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9FAFB),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFF3F4F6)),
+                          ),
                           child: Row(
                             children: [
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: colorScheme.surfaceContainerHighest,
+                                  color: Colors.white,
                                   borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFFE5E7EB),
+                                  ),
                                 ),
-                                child: Icon(
+                                child: const Icon(
                                   Icons.shopping_bag_outlined,
-                                  color: colorScheme.onSurfaceVariant,
+                                  color: Color(0xFF6B7280),
                                   size: 20,
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
-                                  'المنتج #${p.productId.substring(0, 6)}...',
-                                  style: Theme.of(context).textTheme.bodyMedium,
+                                  productsMap[p.productId]?.name ??
+                                      'Unknown (${p.productId})',
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 14,
+                                    color: const Color(0xFF374151),
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryRed.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'x${p.quantity}',
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 14,
+                                    color: AppTheme.primaryRed,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
                               Text(
-                                'x${p.quantity}',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold),
+                                CurrencyFormatter.formatEGP(
+                                  (productsMap[p.productId]?.price ?? 0) *
+                                      p.quantity,
+                                ),
+                                style: GoogleFonts.cairo(
+                                  fontSize: 14,
+                                  color: const Color(0xFF1F2937),
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ],
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            if (ticket.products.isNotEmpty) const SizedBox(height: 16),
-
-            // Total Amount
-            Card(
-              color: colorScheme.primaryContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'إجمالي المبلغ',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.onPrimaryContainer,
-                      ),
-                    ),
-                    Text(
-                      CurrencyFormatter.formatEGP(ticket.saleAmount),
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.onPrimaryContainer,
-                          ),
                     ),
                   ],
                 ),
               ),
+            if (ticket.products.isNotEmpty) const SizedBox(height: 16),
+
+            // Notes
+            if (ticket.workerNotes.isNotEmpty || ticket.clientNotes.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'الملاحظات',
+                      style: GoogleFonts.cairo(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF1F2937),
+                      ),
+                    ),
+                    const Divider(height: 32),
+                    if (ticket.workerNotes.isNotEmpty) ...[
+                      _NoteSection(
+                        title: 'ملاحظات المندوب',
+                        content: ticket.workerNotes,
+                        icon: Icons.note_alt_outlined,
+                      ),
+                      if (ticket.clientNotes.isNotEmpty)
+                        const SizedBox(height: 20),
+                    ],
+                    if (ticket.clientNotes.isNotEmpty)
+                      _NoteSection(
+                        title: 'ملاحظات العميل',
+                        content: ticket.clientNotes,
+                        icon: Icons.speaker_notes_outlined,
+                      ),
+                  ],
+                ),
+              ),
+            if (ticket.workerNotes.isNotEmpty || ticket.clientNotes.isNotEmpty)
+              const SizedBox(height: 16),
+
+            // Location Section
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'الموقع',
+                        style: GoogleFonts.cairo(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF1F2937),
+                        ),
+                      ),
+                      if (_isLoadingLocation)
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                    ],
+                  ),
+                  const Divider(height: 32),
+
+                  // Detailed Address
+                  if (!_isLoadingLocation && _address != null) ...[
+                    // Landmark (if available)
+                    if (_landmark != null && _landmark!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12.0),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.flag,
+                              color: AppTheme.primaryRed,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '$_landmark',
+                                style: GoogleFonts.cairo(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF1F2937),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // Full Address
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.location_city,
+                            color: Colors.grey.shade400,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _address!,
+                              style: GoogleFonts.cairo(
+                                fontSize: 14,
+                                color: const Color(0xFF4B5563),
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // Map Link
+                  InkWell(
+                    onTap: () => _openInMaps(ticket.latitude, ticket.longitude),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFF3F4F6)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryRed.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.map_outlined,
+                              color: AppTheme.primaryRed,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'إحداثيات: ${ticket.latitude.toStringAsFixed(6)}, ${ticket.longitude.toStringAsFixed(6)}',
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade500,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  'اضغط لفتح في الخريطة',
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 12,
+                                    color: AppTheme.primaryRed,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.open_in_new,
+                            color: AppTheme.primaryRed,
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
+
+            // Total Amount
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF374151), Color(0xFF111827)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'إجمالي المبلغ',
+                    style: GoogleFonts.cairo(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white.withValues(alpha: 0.9),
+                    ),
+                  ),
+                  Text(
+                    CurrencyFormatter.formatEGP(ticket.saleAmount),
+                    style: GoogleFonts.cairo(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -328,41 +763,63 @@ class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
   final VoidCallback? onTap;
+  final bool isAction;
+  final bool compact;
 
   const _DetailRow({
     required this.icon,
     required this.label,
     required this.value,
     this.onTap,
+    this.isAction = false,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     Widget content = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: compact ? 4 : 6),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: colorScheme.onSurfaceVariant),
-          const SizedBox(width: 12),
-          Text(
-            '$label:',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
+          Container(
+            padding: EdgeInsets.all(compact ? 6 : 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              size: compact ? 18 : 20,
+              color: const Color(0xFF6B7280),
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: compact ? 8 : 12),
           Expanded(
-            child: Text(
-              value,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.cairo(
+                    fontSize: compact ? 11 : 12,
+                    color: const Color(0xFF6B7280),
+                  ),
+                ),
+                Text(
+                  value,
+                  style: GoogleFonts.cairo(
+                    fontSize: compact ? 13 : 16,
+                    color: isAction
+                        ? AppTheme.primaryRed
+                        : const Color(0xFF1F2937),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
           if (onTap != null)
-            Icon(Icons.chevron_left, color: colorScheme.primary, size: 20),
+            Icon(Icons.arrow_forward_ios, color: AppTheme.primaryRed, size: 16),
         ],
       ),
     );
@@ -370,7 +827,7 @@ class _DetailRow extends StatelessWidget {
     if (onTap != null) {
       return InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         child: content,
       );
     }
@@ -392,94 +849,42 @@ class _NoteSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
+            Icon(icon, size: 18, color: const Color(0xFF6B7280)),
             const SizedBox(width: 8),
             Text(
               title,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
+              style: GoogleFonts.cairo(
+                fontSize: 14,
+                color: const Color(0xFF6B7280),
                 fontWeight: FontWeight.bold,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(8),
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFF3F4F6)),
           ),
-          child: Text(content, style: Theme.of(context).textTheme.bodyMedium),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final TicketStatus status;
-
-  const _StatusBadge({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    Color color;
-    String text;
-    IconData icon;
-
-    switch (status) {
-      case TicketStatus.draft:
-        color = Colors.grey;
-        text = 'مسودة';
-        icon = Icons.edit_note;
-        break;
-      case TicketStatus.queued:
-        color = Colors.orange;
-        text = 'في الانتظار';
-        icon = Icons.hourglass_empty;
-        break;
-      case TicketStatus.submitted:
-        color = Colors.green;
-        text = 'تم الإرسال';
-        icon = Icons.check_circle;
-        break;
-      case TicketStatus.failed:
-        color = Colors.red;
-        text = 'فشل';
-        icon = Icons.error;
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: TextStyle(
-              color: color,
+          child: Text(
+            content,
+            style: GoogleFonts.cairo(
               fontSize: 14,
-              fontWeight: FontWeight.bold,
+              color: const Color(0xFF374151),
+              height: 1.5,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

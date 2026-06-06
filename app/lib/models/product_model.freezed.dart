@@ -22,7 +22,6 @@ Product _$ProductFromJson(Map<String, dynamic> json) {
 /// @nodoc
 mixin _$Product {
   /// Unique identifier for the product (UUID)
-  @JsonKey(name: 'product_id')
   String get productId => throw _privateConstructorUsedError;
 
   /// Product name (must be unique)
@@ -35,12 +34,13 @@ mixin _$Product {
   String get details => throw _privateConstructorUsedError;
 
   /// When the product was created
-  @JsonKey(name: 'created_at')
   DateTime? get createdAt => throw _privateConstructorUsedError;
 
   /// When the product was last updated
-  @JsonKey(name: 'updated_at')
   DateTime? get updatedAt => throw _privateConstructorUsedError;
+
+  /// Sort order index
+  int get sortOrder => throw _privateConstructorUsedError;
 
   /// Serializes this Product to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -57,12 +57,13 @@ abstract class $ProductCopyWith<$Res> {
       _$ProductCopyWithImpl<$Res, Product>;
   @useResult
   $Res call({
-    @JsonKey(name: 'product_id') String productId,
+    String productId,
     String name,
     double price,
     String details,
-    @JsonKey(name: 'created_at') DateTime? createdAt,
-    @JsonKey(name: 'updated_at') DateTime? updatedAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    int sortOrder,
   });
 }
 
@@ -87,6 +88,7 @@ class _$ProductCopyWithImpl<$Res, $Val extends Product>
     Object? details = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
+    Object? sortOrder = null,
   }) {
     return _then(
       _value.copyWith(
@@ -114,6 +116,10 @@ class _$ProductCopyWithImpl<$Res, $Val extends Product>
                 ? _value.updatedAt
                 : updatedAt // ignore: cast_nullable_to_non_nullable
                       as DateTime?,
+            sortOrder: null == sortOrder
+                ? _value.sortOrder
+                : sortOrder // ignore: cast_nullable_to_non_nullable
+                      as int,
           )
           as $Val,
     );
@@ -129,12 +135,13 @@ abstract class _$$ProductImplCopyWith<$Res> implements $ProductCopyWith<$Res> {
   @override
   @useResult
   $Res call({
-    @JsonKey(name: 'product_id') String productId,
+    String productId,
     String name,
     double price,
     String details,
-    @JsonKey(name: 'created_at') DateTime? createdAt,
-    @JsonKey(name: 'updated_at') DateTime? updatedAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    int sortOrder,
   });
 }
 
@@ -158,6 +165,7 @@ class __$$ProductImplCopyWithImpl<$Res>
     Object? details = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
+    Object? sortOrder = null,
   }) {
     return _then(
       _$ProductImpl(
@@ -185,21 +193,27 @@ class __$$ProductImplCopyWithImpl<$Res>
             ? _value.updatedAt
             : updatedAt // ignore: cast_nullable_to_non_nullable
                   as DateTime?,
+        sortOrder: null == sortOrder
+            ? _value.sortOrder
+            : sortOrder // ignore: cast_nullable_to_non_nullable
+                  as int,
       ),
     );
   }
 }
 
 /// @nodoc
-@JsonSerializable()
+
+@JsonSerializable(fieldRename: FieldRename.snake)
 class _$ProductImpl implements _Product {
   const _$ProductImpl({
-    @JsonKey(name: 'product_id') required this.productId,
+    required this.productId,
     required this.name,
     required this.price,
     this.details = '',
-    @JsonKey(name: 'created_at') this.createdAt,
-    @JsonKey(name: 'updated_at') this.updatedAt,
+    this.createdAt,
+    this.updatedAt,
+    this.sortOrder = 0,
   });
 
   factory _$ProductImpl.fromJson(Map<String, dynamic> json) =>
@@ -207,7 +221,6 @@ class _$ProductImpl implements _Product {
 
   /// Unique identifier for the product (UUID)
   @override
-  @JsonKey(name: 'product_id')
   final String productId;
 
   /// Product name (must be unique)
@@ -225,17 +238,20 @@ class _$ProductImpl implements _Product {
 
   /// When the product was created
   @override
-  @JsonKey(name: 'created_at')
   final DateTime? createdAt;
 
   /// When the product was last updated
   @override
-  @JsonKey(name: 'updated_at')
   final DateTime? updatedAt;
+
+  /// Sort order index
+  @override
+  @JsonKey()
+  final int sortOrder;
 
   @override
   String toString() {
-    return 'Product(productId: $productId, name: $name, price: $price, details: $details, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'Product(productId: $productId, name: $name, price: $price, details: $details, createdAt: $createdAt, updatedAt: $updatedAt, sortOrder: $sortOrder)';
   }
 
   @override
@@ -251,7 +267,9 @@ class _$ProductImpl implements _Product {
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
-                other.updatedAt == updatedAt));
+                other.updatedAt == updatedAt) &&
+            (identical(other.sortOrder, sortOrder) ||
+                other.sortOrder == sortOrder));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -264,6 +282,7 @@ class _$ProductImpl implements _Product {
     details,
     createdAt,
     updatedAt,
+    sortOrder,
   );
 
   /// Create a copy of Product
@@ -282,19 +301,19 @@ class _$ProductImpl implements _Product {
 
 abstract class _Product implements Product {
   const factory _Product({
-    @JsonKey(name: 'product_id') required final String productId,
+    required final String productId,
     required final String name,
     required final double price,
     final String details,
-    @JsonKey(name: 'created_at') final DateTime? createdAt,
-    @JsonKey(name: 'updated_at') final DateTime? updatedAt,
+    final DateTime? createdAt,
+    final DateTime? updatedAt,
+    final int sortOrder,
   }) = _$ProductImpl;
 
   factory _Product.fromJson(Map<String, dynamic> json) = _$ProductImpl.fromJson;
 
   /// Unique identifier for the product (UUID)
   @override
-  @JsonKey(name: 'product_id')
   String get productId;
 
   /// Product name (must be unique)
@@ -311,13 +330,15 @@ abstract class _Product implements Product {
 
   /// When the product was created
   @override
-  @JsonKey(name: 'created_at')
   DateTime? get createdAt;
 
   /// When the product was last updated
   @override
-  @JsonKey(name: 'updated_at')
   DateTime? get updatedAt;
+
+  /// Sort order index
+  @override
+  int get sortOrder;
 
   /// Create a copy of Product
   /// with the given fields replaced by the non-null parameter values.

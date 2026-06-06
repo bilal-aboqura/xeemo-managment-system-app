@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+import 'dart:ui'; // For BackdropFilter
 
 import '../models/sales_ticket_model.dart';
 import '../providers/auth_provider.dart';
@@ -28,8 +31,9 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
   int _currentStep = 0;
   bool _isSubmitting = false;
   Position? _currentLocation;
-  String? _locationError;
+  String? _currentAddress;
   bool _isCapturingLocation = false;
+  String? _locationError;
 
   SalesTicketFormData? _formData;
   List<SelectedProduct> _selectedProducts = [];
@@ -44,19 +48,66 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
     setState(() {
       _isCapturingLocation = true;
       _locationError = null;
+      _currentAddress = null;
     });
 
     try {
       final position = await _geolocationService.getCurrentLocation();
-      setState(() {
-        _currentLocation = position;
-        _isCapturingLocation = false;
-      });
+
+      String? address;
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+
+          // Try to find interesting landmarks
+          final Set<String> potentialLandmarks = {};
+          for (final p in placemarks.take(5)) {
+            if (p.name != null && p.name!.isNotEmpty) {
+              final name = p.name!;
+              // Filter out numeric names (house numbers) and duplicates
+              if (!RegExp(r'^[\d٠-٩]').hasMatch(name) &&
+                  name != p.street &&
+                  name != p.subLocality &&
+                  name != p.locality) {
+                potentialLandmarks.add(name);
+              }
+            }
+          }
+
+          final components = [
+            ...potentialLandmarks,
+            place.name, // Include main name (might be house number, but useful)
+            place.street,
+            place.subLocality,
+            place.locality,
+            place.subAdministrativeArea,
+            place.administrativeArea,
+          ].where((element) => element != null && element.isNotEmpty).toSet().toList();
+
+          address = components.join('، ');
+        }
+      } catch (e) {
+        // Geocoding failed, silently ignore
+      }
+
+      if (mounted) {
+        setState(() {
+          _currentLocation = position;
+          _currentAddress = address;
+          _isCapturingLocation = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _locationError = e.toString();
-        _isCapturingLocation = false;
-      });
+      if (mounted) {
+        setState(() {
+          _locationError = e.toString();
+          _isCapturingLocation = false;
+        });
+      }
     }
   }
 
@@ -90,10 +141,12 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
         ticketId: const Uuid().v4(),
         clientName: _formData!.clientName,
         clientPhone: _formData!.clientPhone,
+        laundryName: _formData!.laundryName,
         workerNotes: _formData!.workerNotes,
         clientNotes: _formData!.clientNotes,
         saleAmount: calculatedSaleAmount,
         workerId: user.userId,
+        workerName: user.name,
         products: _selectedProducts
             .map(
               (p) => TicketProductEntry(
@@ -125,7 +178,7 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('فشل إرسال التذكرة: $e'),
+            content: Text('فشل إرسال الزيارة: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -138,30 +191,151 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
   }
 
   void _showSuccessDialog() {
-    showDialog(
+    showGeneralDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        icon: const Icon(Icons.check_circle, color: Colors.green, size: 48),
-        title: const Text('تم الإرسال بنجاح!'),
-        content: const Text('تم إرسال تذكرة المبيعات بنجاح.'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _resetForm();
-            },
-            child: const Text('إنشاء تذكرة جديدة'),
+      barrierLabel: '',
+      transitionDuration: const Duration(milliseconds: 500),
+      pageBuilder: (context, anim1, anim2) => const SizedBox(),
+      transitionBuilder: (context, anim1, anim2, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              insetPadding: const EdgeInsets.all(24),
+              child: Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.9),
+                      Colors.white.withValues(alpha: 0.7),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 40,
+                      spreadRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 600),
+                      curve: Curves.elasticOut,
+                      builder: (context, value, child) {
+                        return Transform.scale(
+                          scale: value,
+                          child: Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.green.withValues(alpha: 0.1),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.green.withValues(alpha: 0.2),
+                                  blurRadius: 20,
+                                  spreadRadius: 5,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.check_rounded,
+                              color: Colors.green,
+                              size: 48,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'تم الإرسال بنجاح',
+                      style: GoogleFonts.cairo(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF1F2937),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'تم إرسال الزيارة بنجاح',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.cairo(
+                        fontSize: 16,
+                        color: const Color(0xFF6B7280),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _resetForm();
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFF6B7280),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            child: Text(
+                              'إنشاء جديدة',
+                              style: GoogleFonts.cairo(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              context.go('/login');
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryRed,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              'تم',
+                              style: GoogleFonts.cairo(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              context.go('/login');
-            },
-            child: const Text('تم'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -173,7 +347,7 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
         icon: const Icon(Icons.cloud_queue, color: Colors.orange, size: 48),
         title: const Text('تم الحفظ في الانتظار'),
         content: const Text(
-          'تم حفظ التذكرة وسيتم إرسالها عند توفر الاتصال بالإنترنت.',
+          'تم حفظ الزيارة وسيتم إرسالها عند توفر الاتصال بالإنترنت.',
         ),
         actions: [
           TextButton(
@@ -181,7 +355,7 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
               Navigator.of(context).pop();
               _resetForm();
             },
-            child: const Text('إنشاء تذكرة جديدة'),
+            child: const Text('إنشاء زيارة جديدة'),
           ),
           ElevatedButton(
             onPressed: () {
@@ -200,6 +374,7 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
       _currentStep = 0;
       _formData = null;
       _selectedProducts = [];
+      _currentAddress = null;
     });
     _captureLocation();
   }
@@ -207,54 +382,118 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('إنشاء تذكرة مبيعات'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              ref.read(authProvider.notifier).signOut();
-              context.go('/login');
-            },
-          ),
-        ],
-      ),
-      body: Stepper(
-        currentStep: _currentStep,
-        type: StepperType.horizontal, // Horizontal looks better usually
-        onStepContinue: _currentStep < 2
-            ? () => setState(() => _currentStep++)
-            : null,
-        onStepCancel: _currentStep > 0
-            ? () => setState(() => _currentStep--)
-            : null,
-        controlsBuilder: (context, details) {
-          if (_currentStep == 2) {
-            return const SizedBox.shrink(); // Custom controls in review step
-          }
-          return Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Row(
-              children: [
-                if (details.onStepCancel != null && _currentStep > 0)
-                  TextButton(
-                    onPressed: details.onStepCancel,
-                    child: const Text('رجوع'),
-                  ),
-              ],
+      backgroundColor: const Color(0xFFF8F9FA),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(100),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color.fromARGB(255, 141, 17, 17), Color(0xFF6E0A0A)],
             ),
-          );
-        },
-        steps: [
-          // Step 1: Client Details
-          Step(
-            title: const Text('العميل'),
-            subtitle: _formData != null ? Text(_formData!.clientName) : null,
-            isActive: _currentStep >= 0,
-            state: _currentStep > 0 ? StepState.complete : StepState.indexed,
-            content: Column(
-              children: [
-                SalesTicketForm(
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(32),
+              bottomRight: Radius.circular(32),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      onPressed: () => context.pop(),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    'إنشاء زيارة مبيعات',
+                    style: GoogleFonts.cairo(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      body: Theme(
+        data: ThemeData.light().copyWith(
+          primaryColor: AppTheme.primaryRed,
+          scaffoldBackgroundColor: const Color(0xFFF8F9FA),
+          canvasColor: const Color(0xFFF8F9FA),
+          colorScheme: ColorScheme.light(
+            primary: AppTheme.primaryRed,
+            secondary: AppTheme.primaryRed,
+            surface: const Color(0xFFF8F9FA),
+            onSurface: const Color(0xFF1F2937),
+          ),
+          textTheme: GoogleFonts.cairoTextTheme(ThemeData.light().textTheme),
+        ),
+        child: Stepper(
+          currentStep: _currentStep,
+          type: StepperType.horizontal,
+          elevation: 0,
+          physics: const ClampingScrollPhysics(),
+          onStepContinue: _currentStep < 2
+              ? () => setState(() => _currentStep++)
+              : null,
+          onStepCancel: _currentStep > 0
+              ? () => setState(() => _currentStep--)
+              : null,
+          controlsBuilder: (context, details) {
+            return const SizedBox.shrink(); // Use custom controls in step content
+          },
+          steps: [
+            // Step 1: Client Details
+            Step(
+              title: Text(
+                'العميل',
+                style: GoogleFonts.cairo(fontWeight: FontWeight.bold),
+              ),
+              subtitle: _formData != null
+                  ? Text(
+                      _formData!.clientName,
+                      style: GoogleFonts.cairo(fontSize: 12),
+                    )
+                  : null,
+              isActive: _currentStep >= 0,
+              state: _currentStep > 0 ? StepState.complete : StepState.indexed,
+              content: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: SalesTicketForm(
                   isLoading: _isSubmitting,
                   onSubmit: (data) {
                     setState(() {
@@ -263,222 +502,389 @@ class _CreateTicketScreenState extends ConsumerState<CreateTicketScreen> {
                     });
                   },
                 ),
-              ],
+              ),
             ),
-          ),
 
-          // Step 2: Select Products
-          Step(
-            title: const Text('المنتجات'),
-            subtitle: _selectedProducts.isNotEmpty
-                ? Text('${_selectedProducts.length} منتجات')
-                : null,
-            isActive: _currentStep >= 1,
-            state: _currentStep > 1 ? StepState.complete : StepState.indexed,
-            content: Column(
-              children: [
-                ProductSelector(
-                  initialSelection: _selectedProducts,
-                  onChanged: (products) {
-                    setState(() => _selectedProducts = products);
-                  },
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => setState(() => _currentStep = 0),
-                      child: const Text('رجوع'),
-                    ),
-                    const Spacer(),
-                    ElevatedButton(
-                      onPressed: () => setState(() => _currentStep = 2),
-                      child: const Text('متابعة للمراجعة'),
+            // Step 2: Select Products
+            Step(
+              title: Text(
+                'المنتجات',
+                style: GoogleFonts.cairo(fontWeight: FontWeight.bold),
+              ),
+              subtitle: _selectedProducts.isNotEmpty
+                  ? Text(
+                      '${_selectedProducts.length} منتجات',
+                      style: GoogleFonts.cairo(fontSize: 12),
+                    )
+                  : null,
+              isActive: _currentStep >= 1,
+              state: _currentStep > 1 ? StepState.complete : StepState.indexed,
+              content: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-
-          // Step 3: Review & Submit
-          Step(
-            title: const Text('المراجعة'),
-            isActive: _currentStep >= 2,
-            state: StepState.indexed,
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Location Status
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                child: Column(
+                  children: [
+                    ProductSelector(
+                      initialSelection: _selectedProducts,
+                      onChanged: (products) {
+                        setState(() => _selectedProducts = products);
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            Icon(
-                              _currentLocation != null
-                                  ? Icons.location_on
-                                  : Icons.location_off,
-                              color: _currentLocation != null
-                                  ? Colors.green
-                                  : Colors.red,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'الموقع',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const Spacer(),
-                            if (_isCapturingLocation)
-                              const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            else
-                              TextButton(
-                                onPressed: _captureLocation,
-                                child: const Text('تحديث'),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => setState(() => _currentStep = 0),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              side: const BorderSide(color: Color(0xFFD1D5DB)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                          ],
-                        ),
-                        if (_currentLocation != null)
-                          Text(
-                            '${_currentLocation!.latitude.toStringAsFixed(6)}, '
-                            '${_currentLocation!.longitude.toStringAsFixed(6)}',
-                            style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            child: Text(
+                              'رجوع',
+                              style: GoogleFonts.cairo(
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF4B5563),
+                              ),
+                            ),
                           ),
-                        if (_locationError != null)
-                          Text(
-                            _locationError!,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(color: Colors.red),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => setState(() => _currentStep = 2),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryRed,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(
+                              'متابعة للمراجعة',
+                              style: GoogleFonts.cairo(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Step 3: Review & Submit
+            Step(
+              title: Text(
+                'المراجعة',
+                style: GoogleFonts.cairo(fontWeight: FontWeight.bold),
+              ),
+              isActive: _currentStep >= 2,
+              state: StepState.indexed,
+              content: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Location Status
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _currentLocation != null
+                                ? Colors.green.withValues(alpha: 0.1)
+                                : Colors.red.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            _currentLocation != null
+                                ? Icons.location_on
+                                : Icons.location_off,
+                            color: _currentLocation != null
+                                ? Colors.green
+                                : Colors.red,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'الموقع',
+                                style: GoogleFonts.cairo(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (_currentAddress != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    _currentAddress!,
+                                    style: GoogleFonts.cairo(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: const Color(0xFF374151),
+                                    ),
+                                  ),
+                                ),
+                              if (_currentLocation != null)
+                                Text(
+                                  'الإحداثيات: ${_currentLocation!.latitude.toStringAsFixed(6)}, ${_currentLocation!.longitude.toStringAsFixed(6)}',
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 13,
+                                    color: const Color(0xFF6B7280),
+                                  ),
+                                ),
+                              if (_locationError != null)
+                                Text(
+                                  _locationError!,
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 12,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        if (_isCapturingLocation)
+                          const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          TextButton(
+                            onPressed: _captureLocation,
+                            child: Text(
+                              'تحديث',
+                              style: GoogleFonts.cairo(
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primaryRed,
+                              ),
+                            ),
                           ),
                       ],
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Order Summary
-                if (_formData != null) ...[
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'ملخص الطلب',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const Divider(),
-                          _SummaryRow('العميل', _formData!.clientName),
-                          _SummaryRow('الهاتف', _formData!.clientPhone),
-                          if (_formData!.workerNotes.isNotEmpty)
-                            _SummaryRow('ملاحظات', _formData!.workerNotes),
-                          if (_selectedProducts.isNotEmpty) ...[
-                            const Divider(),
-                            Text(
-                              'المنتجات (${_selectedProducts.length})',
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                            const SizedBox(height: 8),
-                            ...(_selectedProducts.map(
-                              (p) => Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 2,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text('${p.product.name} x${p.quantity}'),
-                                    Text(
-                                      CurrencyFormatter.formatEGP(p.totalPrice),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )),
-                            const Divider(),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'الإجمالي',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                                Text(
-                                  CurrencyFormatter.formatEGP(
-                                    _selectedProducts.fold<double>(
-                                      0,
-                                      (sum, p) => sum + p.totalPrice,
-                                    ),
-                                  ),
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.primary,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Divider(),
                     ),
-                  ),
-                ],
-                const SizedBox(height: 24),
 
-                // Action Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _isSubmitting
-                            ? null
-                            : () => setState(() => _currentStep = 1),
-                        child: const Text('رجوع'),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton.icon(
-                        onPressed: _isSubmitting || _currentLocation == null
-                            ? null
-                            : _handleSubmit,
-                        icon: _isSubmitting
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.send),
-                        label: Text(
-                          _isSubmitting ? 'جاري الإرسال...' : 'إرسال التذكرة',
+                    // Order Summary
+                    if (_formData != null) ...[
+                      Text(
+                        'ملخص الطلب',
+                        style: GoogleFonts.cairo(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      _SummaryRow('العميل', _formData!.clientName),
+                      // Laundry Name Row
+                      if (_formData!.laundryName.isNotEmpty)
+                        _SummaryRow('المغسلة', _formData!.laundryName),
+                      _SummaryRow('الهاتف', _formData!.clientPhone),
+                      if (_formData!.workerNotes.isNotEmpty)
+                        _SummaryRow('ملاحظات المندوب', _formData!.workerNotes),
+                      if (_formData!.clientNotes.isNotEmpty)
+                        _SummaryRow('ملاحظات العميل', _formData!.clientNotes),
+
+                      if (_selectedProducts.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Divider(),
+                        ),
+                        Text(
+                          'المنتجات (${_selectedProducts.length})',
+                          style: GoogleFonts.cairo(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9FAFB),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFF3F4F6)),
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            children: [
+                              ...(_selectedProducts.map(
+                                (p) => Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        '${p.quantity}x',
+                                        style: GoogleFonts.cairo(
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.primaryRed,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          p.product.name,
+                                          style: GoogleFonts.cairo(
+                                            color: const Color(0xFF374151),
+                                          ),
+                                        ),
+                                      ),
+                                      Text(
+                                        CurrencyFormatter.formatEGP(
+                                          p.totalPrice,
+                                        ),
+                                        style: GoogleFonts.cairo(
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.deepCharcoal,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )),
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8),
+                                child: Divider(),
+                              ),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'الإجمالي',
+                                    style: GoogleFonts.cairo(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: AppTheme.deepCharcoal,
+                                    ),
+                                  ),
+                                  Text(
+                                    CurrencyFormatter.formatEGP(
+                                      _selectedProducts.fold<double>(
+                                        0,
+                                        (sum, p) => sum + p.totalPrice,
+                                      ),
+                                    ),
+                                    style: GoogleFonts.cairo(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                      color: AppTheme.primaryRed,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                    const SizedBox(height: 32),
+
+                    // Action Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _isSubmitting
+                                ? null
+                                : () => setState(() => _currentStep = 1),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              side: const BorderSide(color: Color(0xFFD1D5DB)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(
+                              'رجوع',
+                              style: GoogleFonts.cairo(
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF4B5563),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton.icon(
+                            onPressed: _isSubmitting || _currentLocation == null
+                                ? null
+                                : _handleSubmit,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryRed,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            icon: _isSubmitting
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.send, color: Colors.white),
+                            label: Text(
+                              _isSubmitting
+                                  ? 'جاري الإرسال...'
+                                  : 'إرسال الزيارة',
+                              style: GoogleFonts.cairo(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'supabase_service.dart';
@@ -5,7 +6,7 @@ import 'supabase_service.dart';
 /// Service for capturing device geolocation
 class GeolocationService {
   /// Get current location with permission handling
-  /// 
+  ///
   /// Returns the current position or throws an exception if location
   /// cannot be obtained.
   Future<Position> getCurrentLocation() async {
@@ -35,19 +36,51 @@ class GeolocationService {
         );
       }
 
-      // Get current position with high accuracy
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
-        ),
-      );
+      // Try to get current position with high accuracy and extended timeout
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.best, // Use best accuracy
+            timeLimit: Duration(seconds: 30), // Extended timeout
+            distanceFilter: 0, // Get updates even for small movements
+          ),
+        );
 
-      SupabaseService.logInfo(
-        'Location captured: ${position.latitude}, ${position.longitude}',
-      );
+        SupabaseService.logInfo(
+          'Location captured: ${position.latitude}, ${position.longitude}',
+        );
 
-      return position;
+        return position;
+      } on TimeoutException {
+        // Fallback: try to get last known position
+        SupabaseService.logWarning(
+          'Location timeout, trying last known position',
+        );
+        final lastPosition = await Geolocator.getLastKnownPosition();
+        if (lastPosition != null) {
+          SupabaseService.logInfo(
+            'Using last known location: ${lastPosition.latitude}, ${lastPosition.longitude}',
+          );
+          return lastPosition;
+        }
+
+        // If no last known position, try with lower accuracy
+        SupabaseService.logWarning(
+          'No last known position, trying with lower accuracy',
+        );
+        final fallbackPosition = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 20),
+          ),
+        );
+
+        SupabaseService.logInfo(
+          'Fallback location captured: ${fallbackPosition.latitude}, ${fallbackPosition.longitude}',
+        );
+
+        return fallbackPosition;
+      }
     } catch (e) {
       if (e is LocationException) rethrow;
       SupabaseService.logError('Failed to get location', e);

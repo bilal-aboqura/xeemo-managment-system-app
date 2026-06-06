@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../core/theme.dart';
 
 /// Form widget for capturing sales ticket information
 class SalesTicketForm extends StatefulWidget {
@@ -33,7 +35,7 @@ class _SalesTicketFormState extends State<SalesTicketForm> {
   late final TextEditingController _clientPhoneController;
   late final TextEditingController _workerNotesController;
   late final TextEditingController _clientNotesController;
-  late final TextEditingController _saleAmountController;
+  late final TextEditingController _laundryNameController;
 
   @override
   void initState() {
@@ -46,7 +48,7 @@ class _SalesTicketFormState extends State<SalesTicketForm> {
     );
     _workerNotesController = TextEditingController();
     _clientNotesController = TextEditingController();
-    _saleAmountController = TextEditingController();
+    _laundryNameController = TextEditingController();
   }
 
   @override
@@ -55,7 +57,7 @@ class _SalesTicketFormState extends State<SalesTicketForm> {
     _clientPhoneController.dispose();
     _workerNotesController.dispose();
     _clientNotesController.dispose();
-    _saleAmountController.dispose();
+    _laundryNameController.dispose();
     super.dispose();
   }
 
@@ -65,9 +67,9 @@ class _SalesTicketFormState extends State<SalesTicketForm> {
     final data = SalesTicketFormData(
       clientName: _clientNameController.text.trim(),
       clientPhone: _clientPhoneController.text.trim(),
+      laundryName: _laundryNameController.text.trim(),
       workerNotes: _workerNotesController.text.trim(),
       clientNotes: _clientNotesController.text.trim(),
-      saleAmount: double.tryParse(_saleAmountController.text) ?? 0.0,
     );
 
     widget.onSubmit(data);
@@ -76,14 +78,38 @@ class _SalesTicketFormState extends State<SalesTicketForm> {
   void _clearForm() {
     _clientNameController.clear();
     _clientPhoneController.clear();
+    _laundryNameController.clear();
     _workerNotesController.clear();
     _clientNotesController.clear();
-    _saleAmountController.clear();
     _formKey.currentState?.reset();
   }
 
   @override
   Widget build(BuildContext context) {
+    final inputDecoration = InputDecoration(
+      filled: true,
+      fillColor: const Color(0xFFF9FAFB),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: AppTheme.primaryRed, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.red),
+      ),
+      labelStyle: GoogleFonts.cairo(color: const Color(0xFF6B7280)),
+      hintStyle: GoogleFonts.cairo(color: const Color(0xFF9CA3AF)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    );
+
     return Form(
       key: _formKey,
       child: Column(
@@ -96,9 +122,13 @@ class _SalesTicketFormState extends State<SalesTicketForm> {
             textInputAction: TextInputAction.next,
             textCapitalization: TextCapitalization.words,
             textAlign: TextAlign.right,
-            decoration: const InputDecoration(
+            style: GoogleFonts.cairo(),
+            decoration: inputDecoration.copyWith(
               labelText: 'اسم العميل *',
-              prefixIcon: Icon(Icons.person_outline),
+              prefixIcon: const Icon(
+                Icons.person_outline,
+                color: Color(0xFF6B7280),
+              ),
               hintText: 'أدخل اسم العميل',
             ),
             validator: (value) {
@@ -112,6 +142,31 @@ class _SalesTicketFormState extends State<SalesTicketForm> {
             },
           ),
           const SizedBox(height: 16),
+          // Laundry Name
+          TextFormField(
+            controller: _laundryNameController,
+            enabled: !widget.isLoading,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.words,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.cairo(),
+            decoration: inputDecoration.copyWith(
+              labelText: 'اسم المغسلة *',
+              counterText: "",
+              prefixIcon: const Icon(
+                Icons.storefront_outlined,
+                color: Color(0xFF6B7280),
+              ),
+              hintText: 'أدخل اسم المغسلة',
+            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'اسم المغسلة مطلوب';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
 
           // Client Phone
           TextFormField(
@@ -120,59 +175,30 @@ class _SalesTicketFormState extends State<SalesTicketForm> {
             keyboardType: TextInputType.phone,
             textInputAction: TextInputAction.next,
             textAlign: TextAlign.right,
-            textDirection: TextDirection
-                .ltr, // Phone numbers are LTR usually, but labels RTL
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s()]')),
-            ],
-            decoration: const InputDecoration(
+            textDirection: TextDirection.ltr,
+            style: GoogleFonts.cairo(),
+            maxLength: 11,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: inputDecoration.copyWith(
               labelText: 'رقم الهاتف *',
-              prefixIcon: Icon(Icons.phone_outlined),
+              counterText: "",
+              prefixIcon: const Icon(
+                Icons.phone_outlined,
+                color: Color(0xFF6B7280),
+              ),
               hintText: '01xxxxxxxxx',
             ),
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
                 return 'رقم الهاتف مطلوب';
               }
-              final digitsOnly = value.replaceAll(RegExp(r'[^0-9]'), '');
-              if (digitsOnly.length < 7) {
-                return 'يرجى إدخال رقم هاتف صحيح';
+              if (!RegExp(r'^01[0125][0-9]{8}$').hasMatch(value)) {
+                return 'رقم الهاتف يجب أن يكون 11 رقم ويبدأ ب 01';
               }
               return null;
             },
           ),
           const SizedBox(height: 16),
-
-          // Sale Amount
-          TextFormField(
-            controller: _saleAmountController,
-            enabled: !widget.isLoading,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            textInputAction: TextInputAction.next,
-            textAlign: TextAlign.right,
-            textDirection: TextDirection.ltr, // Numbers LTR
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-            ],
-            decoration: const InputDecoration(
-              labelText: 'مبلغ البيع *',
-              prefixIcon: Icon(Icons.attach_money),
-              suffixText: 'ج.م',
-              hintText: '0.00',
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'مبلغ البيع مطلوب';
-              }
-              final amount = double.tryParse(value);
-              if (amount == null || amount < 0) {
-                return 'يرجى إدخال مبلغ صحيح';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-
           // Worker Notes
           TextFormField(
             controller: _workerNotesController,
@@ -181,11 +207,12 @@ class _SalesTicketFormState extends State<SalesTicketForm> {
             textInputAction: TextInputAction.next,
             textCapitalization: TextCapitalization.sentences,
             textAlign: TextAlign.right,
-            decoration: const InputDecoration(
-              labelText: 'ملاحظات الموظف',
-              prefixIcon: Padding(
+            style: GoogleFonts.cairo(),
+            decoration: inputDecoration.copyWith(
+              labelText: 'ملاحظات المندوب',
+              prefixIcon: const Padding(
                 padding: EdgeInsets.only(bottom: 48),
-                child: Icon(Icons.note_alt_outlined),
+                child: Icon(Icons.note_alt_outlined, color: Color(0xFF6B7280)),
               ),
               hintText: 'أضف أي ملاحظات حول عملية البيع...',
               alignLabelWithHint: true,
@@ -201,11 +228,15 @@ class _SalesTicketFormState extends State<SalesTicketForm> {
             textInputAction: TextInputAction.done,
             textCapitalization: TextCapitalization.sentences,
             textAlign: TextAlign.right,
-            decoration: const InputDecoration(
+            style: GoogleFonts.cairo(),
+            decoration: inputDecoration.copyWith(
               labelText: 'ملاحظات العميل',
-              prefixIcon: Padding(
+              prefixIcon: const Padding(
                 padding: EdgeInsets.only(bottom: 48),
-                child: Icon(Icons.speaker_notes_outlined),
+                child: Icon(
+                  Icons.speaker_notes_outlined,
+                  color: Color(0xFF6B7280),
+                ),
               ),
               hintText: 'أي ملاحظات من العميل...',
               alignLabelWithHint: true,
@@ -219,7 +250,20 @@ class _SalesTicketFormState extends State<SalesTicketForm> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: widget.isLoading ? null : _clearForm,
-                  child: const Text('مسح'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: const BorderSide(color: Color(0xFFD1D5DB)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'مسح',
+                    style: GoogleFonts.cairo(
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF4B5563),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -227,13 +271,30 @@ class _SalesTicketFormState extends State<SalesTicketForm> {
                 flex: 2,
                 child: ElevatedButton(
                   onPressed: widget.isLoading ? null : _handleSubmit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryRed,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                   child: widget.isLoading
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
-                      : const Text('متابعة'),
+                      : Text(
+                          'متابعة',
+                          style: GoogleFonts.cairo(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -248,15 +309,15 @@ class _SalesTicketFormState extends State<SalesTicketForm> {
 class SalesTicketFormData {
   final String clientName;
   final String clientPhone;
+  final String laundryName;
   final String workerNotes;
   final String clientNotes;
-  final double saleAmount;
 
   SalesTicketFormData({
     required this.clientName,
     required this.clientPhone,
+    required this.laundryName,
     required this.workerNotes,
     required this.clientNotes,
-    required this.saleAmount,
   });
 }

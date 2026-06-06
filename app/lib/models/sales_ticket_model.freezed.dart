@@ -22,32 +22,31 @@ SalesTicket _$SalesTicketFromJson(Map<String, dynamic> json) {
 /// @nodoc
 mixin _$SalesTicket {
   /// Unique identifier for the ticket (UUID)
-  @JsonKey(name: 'ticket_id')
   String get ticketId => throw _privateConstructorUsedError;
 
   /// Client's name
-  @JsonKey(name: 'client_name')
   String get clientName => throw _privateConstructorUsedError;
 
   /// Client's phone number
-  @JsonKey(name: 'client_phone')
   String get clientPhone => throw _privateConstructorUsedError;
 
+  /// Name of the laundry business
+  String get laundryName => throw _privateConstructorUsedError;
+
   /// Notes from the worker
-  @JsonKey(name: 'worker_notes')
   String get workerNotes => throw _privateConstructorUsedError;
 
   /// Notes from the client
-  @JsonKey(name: 'client_notes')
   String get clientNotes => throw _privateConstructorUsedError;
 
   /// Total sale amount
-  @JsonKey(name: 'sale_amount')
   double get saleAmount => throw _privateConstructorUsedError;
 
   /// ID of the worker who created the ticket
-  @JsonKey(name: 'worker_id')
   String get workerId => throw _privateConstructorUsedError;
+
+  /// Name of the worker who created the ticket
+  String get workerName => throw _privateConstructorUsedError;
 
   /// List of product IDs with quantities
   List<TicketProductEntry> get products => throw _privateConstructorUsedError;
@@ -59,7 +58,6 @@ mixin _$SalesTicket {
   double get longitude => throw _privateConstructorUsedError;
 
   /// When the ticket was created
-  @JsonKey(name: 'created_at')
   DateTime get createdAt => throw _privateConstructorUsedError;
 
   /// Current status of the ticket
@@ -83,17 +81,19 @@ abstract class $SalesTicketCopyWith<$Res> {
   ) = _$SalesTicketCopyWithImpl<$Res, SalesTicket>;
   @useResult
   $Res call({
-    @JsonKey(name: 'ticket_id') String ticketId,
-    @JsonKey(name: 'client_name') String clientName,
-    @JsonKey(name: 'client_phone') String clientPhone,
-    @JsonKey(name: 'worker_notes') String workerNotes,
-    @JsonKey(name: 'client_notes') String clientNotes,
-    @JsonKey(name: 'sale_amount') double saleAmount,
-    @JsonKey(name: 'worker_id') String workerId,
+    String ticketId,
+    String clientName,
+    String clientPhone,
+    String laundryName,
+    String workerNotes,
+    String clientNotes,
+    double saleAmount,
+    String workerId,
+    String workerName,
     List<TicketProductEntry> products,
     double latitude,
     double longitude,
-    @JsonKey(name: 'created_at') DateTime createdAt,
+    DateTime createdAt,
     TicketStatus status,
   });
 }
@@ -116,10 +116,12 @@ class _$SalesTicketCopyWithImpl<$Res, $Val extends SalesTicket>
     Object? ticketId = null,
     Object? clientName = null,
     Object? clientPhone = null,
+    Object? laundryName = null,
     Object? workerNotes = null,
     Object? clientNotes = null,
     Object? saleAmount = null,
     Object? workerId = null,
+    Object? workerName = null,
     Object? products = null,
     Object? latitude = null,
     Object? longitude = null,
@@ -140,6 +142,10 @@ class _$SalesTicketCopyWithImpl<$Res, $Val extends SalesTicket>
                 ? _value.clientPhone
                 : clientPhone // ignore: cast_nullable_to_non_nullable
                       as String,
+            laundryName: null == laundryName
+                ? _value.laundryName
+                : laundryName // ignore: cast_nullable_to_non_nullable
+                      as String,
             workerNotes: null == workerNotes
                 ? _value.workerNotes
                 : workerNotes // ignore: cast_nullable_to_non_nullable
@@ -155,6 +161,10 @@ class _$SalesTicketCopyWithImpl<$Res, $Val extends SalesTicket>
             workerId: null == workerId
                 ? _value.workerId
                 : workerId // ignore: cast_nullable_to_non_nullable
+                      as String,
+            workerName: null == workerName
+                ? _value.workerName
+                : workerName // ignore: cast_nullable_to_non_nullable
                       as String,
             products: null == products
                 ? _value.products
@@ -192,17 +202,19 @@ abstract class _$$SalesTicketImplCopyWith<$Res>
   @override
   @useResult
   $Res call({
-    @JsonKey(name: 'ticket_id') String ticketId,
-    @JsonKey(name: 'client_name') String clientName,
-    @JsonKey(name: 'client_phone') String clientPhone,
-    @JsonKey(name: 'worker_notes') String workerNotes,
-    @JsonKey(name: 'client_notes') String clientNotes,
-    @JsonKey(name: 'sale_amount') double saleAmount,
-    @JsonKey(name: 'worker_id') String workerId,
+    String ticketId,
+    String clientName,
+    String clientPhone,
+    String laundryName,
+    String workerNotes,
+    String clientNotes,
+    double saleAmount,
+    String workerId,
+    String workerName,
     List<TicketProductEntry> products,
     double latitude,
     double longitude,
-    @JsonKey(name: 'created_at') DateTime createdAt,
+    DateTime createdAt,
     TicketStatus status,
   });
 }
@@ -224,10 +236,12 @@ class __$$SalesTicketImplCopyWithImpl<$Res>
     Object? ticketId = null,
     Object? clientName = null,
     Object? clientPhone = null,
+    Object? laundryName = null,
     Object? workerNotes = null,
     Object? clientNotes = null,
     Object? saleAmount = null,
     Object? workerId = null,
+    Object? workerName = null,
     Object? products = null,
     Object? latitude = null,
     Object? longitude = null,
@@ -248,6 +262,10 @@ class __$$SalesTicketImplCopyWithImpl<$Res>
             ? _value.clientPhone
             : clientPhone // ignore: cast_nullable_to_non_nullable
                   as String,
+        laundryName: null == laundryName
+            ? _value.laundryName
+            : laundryName // ignore: cast_nullable_to_non_nullable
+                  as String,
         workerNotes: null == workerNotes
             ? _value.workerNotes
             : workerNotes // ignore: cast_nullable_to_non_nullable
@@ -263,6 +281,10 @@ class __$$SalesTicketImplCopyWithImpl<$Res>
         workerId: null == workerId
             ? _value.workerId
             : workerId // ignore: cast_nullable_to_non_nullable
+                  as String,
+        workerName: null == workerName
+            ? _value.workerName
+            : workerName // ignore: cast_nullable_to_non_nullable
                   as String,
         products: null == products
             ? _value._products
@@ -290,20 +312,23 @@ class __$$SalesTicketImplCopyWithImpl<$Res>
 }
 
 /// @nodoc
-@JsonSerializable()
+
+@JsonSerializable(fieldRename: FieldRename.snake)
 class _$SalesTicketImpl implements _SalesTicket {
   const _$SalesTicketImpl({
-    @JsonKey(name: 'ticket_id') required this.ticketId,
-    @JsonKey(name: 'client_name') required this.clientName,
-    @JsonKey(name: 'client_phone') required this.clientPhone,
-    @JsonKey(name: 'worker_notes') this.workerNotes = '',
-    @JsonKey(name: 'client_notes') this.clientNotes = '',
-    @JsonKey(name: 'sale_amount') required this.saleAmount,
-    @JsonKey(name: 'worker_id') required this.workerId,
+    required this.ticketId,
+    required this.clientName,
+    required this.clientPhone,
+    this.laundryName = '',
+    this.workerNotes = '',
+    this.clientNotes = '',
+    required this.saleAmount,
+    required this.workerId,
+    this.workerName = '',
     required final List<TicketProductEntry> products,
     required this.latitude,
     required this.longitude,
-    @JsonKey(name: 'created_at') required this.createdAt,
+    required this.createdAt,
     this.status = TicketStatus.draft,
   }) : _products = products;
 
@@ -312,38 +337,43 @@ class _$SalesTicketImpl implements _SalesTicket {
 
   /// Unique identifier for the ticket (UUID)
   @override
-  @JsonKey(name: 'ticket_id')
   final String ticketId;
 
   /// Client's name
   @override
-  @JsonKey(name: 'client_name')
   final String clientName;
 
   /// Client's phone number
   @override
-  @JsonKey(name: 'client_phone')
   final String clientPhone;
+
+  /// Name of the laundry business
+  @override
+  @JsonKey()
+  final String laundryName;
 
   /// Notes from the worker
   @override
-  @JsonKey(name: 'worker_notes')
+  @JsonKey()
   final String workerNotes;
 
   /// Notes from the client
   @override
-  @JsonKey(name: 'client_notes')
+  @JsonKey()
   final String clientNotes;
 
   /// Total sale amount
   @override
-  @JsonKey(name: 'sale_amount')
   final double saleAmount;
 
   /// ID of the worker who created the ticket
   @override
-  @JsonKey(name: 'worker_id')
   final String workerId;
+
+  /// Name of the worker who created the ticket
+  @override
+  @JsonKey()
+  final String workerName;
 
   /// List of product IDs with quantities
   final List<TicketProductEntry> _products;
@@ -366,7 +396,6 @@ class _$SalesTicketImpl implements _SalesTicket {
 
   /// When the ticket was created
   @override
-  @JsonKey(name: 'created_at')
   final DateTime createdAt;
 
   /// Current status of the ticket
@@ -376,7 +405,7 @@ class _$SalesTicketImpl implements _SalesTicket {
 
   @override
   String toString() {
-    return 'SalesTicket(ticketId: $ticketId, clientName: $clientName, clientPhone: $clientPhone, workerNotes: $workerNotes, clientNotes: $clientNotes, saleAmount: $saleAmount, workerId: $workerId, products: $products, latitude: $latitude, longitude: $longitude, createdAt: $createdAt, status: $status)';
+    return 'SalesTicket(ticketId: $ticketId, clientName: $clientName, clientPhone: $clientPhone, laundryName: $laundryName, workerNotes: $workerNotes, clientNotes: $clientNotes, saleAmount: $saleAmount, workerId: $workerId, workerName: $workerName, products: $products, latitude: $latitude, longitude: $longitude, createdAt: $createdAt, status: $status)';
   }
 
   @override
@@ -390,6 +419,8 @@ class _$SalesTicketImpl implements _SalesTicket {
                 other.clientName == clientName) &&
             (identical(other.clientPhone, clientPhone) ||
                 other.clientPhone == clientPhone) &&
+            (identical(other.laundryName, laundryName) ||
+                other.laundryName == laundryName) &&
             (identical(other.workerNotes, workerNotes) ||
                 other.workerNotes == workerNotes) &&
             (identical(other.clientNotes, clientNotes) ||
@@ -398,6 +429,8 @@ class _$SalesTicketImpl implements _SalesTicket {
                 other.saleAmount == saleAmount) &&
             (identical(other.workerId, workerId) ||
                 other.workerId == workerId) &&
+            (identical(other.workerName, workerName) ||
+                other.workerName == workerName) &&
             const DeepCollectionEquality().equals(other._products, _products) &&
             (identical(other.latitude, latitude) ||
                 other.latitude == latitude) &&
@@ -415,10 +448,12 @@ class _$SalesTicketImpl implements _SalesTicket {
     ticketId,
     clientName,
     clientPhone,
+    laundryName,
     workerNotes,
     clientNotes,
     saleAmount,
     workerId,
+    workerName,
     const DeepCollectionEquality().hash(_products),
     latitude,
     longitude,
@@ -442,17 +477,19 @@ class _$SalesTicketImpl implements _SalesTicket {
 
 abstract class _SalesTicket implements SalesTicket {
   const factory _SalesTicket({
-    @JsonKey(name: 'ticket_id') required final String ticketId,
-    @JsonKey(name: 'client_name') required final String clientName,
-    @JsonKey(name: 'client_phone') required final String clientPhone,
-    @JsonKey(name: 'worker_notes') final String workerNotes,
-    @JsonKey(name: 'client_notes') final String clientNotes,
-    @JsonKey(name: 'sale_amount') required final double saleAmount,
-    @JsonKey(name: 'worker_id') required final String workerId,
+    required final String ticketId,
+    required final String clientName,
+    required final String clientPhone,
+    final String laundryName,
+    final String workerNotes,
+    final String clientNotes,
+    required final double saleAmount,
+    required final String workerId,
+    final String workerName,
     required final List<TicketProductEntry> products,
     required final double latitude,
     required final double longitude,
-    @JsonKey(name: 'created_at') required final DateTime createdAt,
+    required final DateTime createdAt,
     final TicketStatus status,
   }) = _$SalesTicketImpl;
 
@@ -461,38 +498,39 @@ abstract class _SalesTicket implements SalesTicket {
 
   /// Unique identifier for the ticket (UUID)
   @override
-  @JsonKey(name: 'ticket_id')
   String get ticketId;
 
   /// Client's name
   @override
-  @JsonKey(name: 'client_name')
   String get clientName;
 
   /// Client's phone number
   @override
-  @JsonKey(name: 'client_phone')
   String get clientPhone;
+
+  /// Name of the laundry business
+  @override
+  String get laundryName;
 
   /// Notes from the worker
   @override
-  @JsonKey(name: 'worker_notes')
   String get workerNotes;
 
   /// Notes from the client
   @override
-  @JsonKey(name: 'client_notes')
   String get clientNotes;
 
   /// Total sale amount
   @override
-  @JsonKey(name: 'sale_amount')
   double get saleAmount;
 
   /// ID of the worker who created the ticket
   @override
-  @JsonKey(name: 'worker_id')
   String get workerId;
+
+  /// Name of the worker who created the ticket
+  @override
+  String get workerName;
 
   /// List of product IDs with quantities
   @override
@@ -508,7 +546,6 @@ abstract class _SalesTicket implements SalesTicket {
 
   /// When the ticket was created
   @override
-  @JsonKey(name: 'created_at')
   DateTime get createdAt;
 
   /// Current status of the ticket

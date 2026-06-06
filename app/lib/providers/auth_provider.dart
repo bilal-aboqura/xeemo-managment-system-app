@@ -12,13 +12,7 @@ final authServiceProvider = Provider<AuthService>((ref) {
 });
 
 /// Auth state enum for tracking authentication status
-enum AuthStatus {
-  unknown,
-  authenticated,
-  unauthenticated,
-  loading,
-  error,
-}
+enum AuthStatus { unknown, authenticated, unauthenticated, loading, error }
 
 /// Auth state class holding current auth status and user
 class AuthState {
@@ -26,11 +20,7 @@ class AuthState {
   final app_models.User? user;
   final String? error;
 
-  const AuthState({
-    this.status = AuthStatus.unknown,
-    this.user,
-    this.error,
-  });
+  const AuthState({this.status = AuthStatus.unknown, this.user, this.error});
 
   AuthState copyWith({
     AuthStatus? status,
@@ -69,52 +59,31 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       state = state.copyWith(status: AuthStatus.loading);
       final user = await _authService.getCurrentUser();
-      
+
       if (user != null) {
-        state = AuthState(
-          status: AuthStatus.authenticated,
-          user: user,
-        );
+        state = AuthState(status: AuthStatus.authenticated, user: user);
       } else {
         state = const AuthState(status: AuthStatus.unauthenticated);
       }
     } catch (e) {
       SupabaseService.logError('Auth init failed', e);
-      state = AuthState(
-        status: AuthStatus.error,
-        error: e.toString(),
-      );
+      state = AuthState(status: AuthStatus.error, error: e.toString());
     }
   }
 
   /// Sign in with email and password
-  Future<void> signIn({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> signIn({required String email, required String password}) async {
     try {
       state = state.copyWith(status: AuthStatus.loading, error: null);
-      
-      final user = await _authService.signIn(
-        email: email,
-        password: password,
-      );
 
-      state = AuthState(
-        status: AuthStatus.authenticated,
-        user: user,
-      );
+      final user = await _authService.signIn(email: email, password: password);
+
+      state = AuthState(status: AuthStatus.authenticated, user: user);
     } on AuthException catch (e) {
-      state = AuthState(
-        status: AuthStatus.error,
-        error: e.message,
-      );
+      state = AuthState(status: AuthStatus.error, error: e.message);
       rethrow;
     } catch (e) {
-      state = AuthState(
-        status: AuthStatus.error,
-        error: e.toString(),
-      );
+      state = AuthState(status: AuthStatus.error, error: e.toString());
       rethrow;
     }
   }
@@ -126,10 +95,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _authService.signOut();
       state = const AuthState(status: AuthStatus.unauthenticated);
     } catch (e) {
-      state = AuthState(
-        status: AuthStatus.error,
-        error: e.toString(),
-      );
+      state = AuthState(status: AuthStatus.error, error: e.toString());
       rethrow;
     }
   }
@@ -164,4 +130,30 @@ final isWorkerProvider = Provider<bool>((ref) {
 /// Provider for checking if user is a manager
 final isManagerProvider = Provider<bool>((ref) {
   return ref.watch(authProvider).isManager;
+});
+
+/// Provider to fetch worker name by user ID from profiles table
+final workerNameProvider = FutureProvider.family<String, String>((
+  ref,
+  userId,
+) async {
+  if (!AppConfig.isSupabaseConfigured) {
+    return 'غير متوفر';
+  }
+
+  try {
+    final response = await SupabaseService.client
+        .from('profiles')
+        .select('name')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (response != null && response['name'] != null) {
+      return response['name'] as String;
+    }
+    return 'غير متوفر';
+  } catch (e) {
+    SupabaseService.logError('Failed to fetch worker name', e);
+    return 'غير متوفر';
+  }
 });

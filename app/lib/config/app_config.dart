@@ -18,7 +18,7 @@ class AppConfig {
   );
 
   /// App name
-  static const String appName = 'Xeemo Sales';
+  static const String appName = 'Xeemo Mandoob';
 
   /// App version
   static const String appVersion = '1.0.0';

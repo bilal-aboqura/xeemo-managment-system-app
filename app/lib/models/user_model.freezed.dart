@@ -30,7 +30,7 @@ mixin _$User {
   /// User's email address
   String get email => throw _privateConstructorUsedError;
 
-  /// User's role (worker or manager)
+  /// User's role (worker, manager, or super_manager)
   UserRole get role => throw _privateConstructorUsedError;
 
   /// When the user profile was created
@@ -196,7 +196,7 @@ class _$UserImpl extends _User {
   @override
   final String email;
 
-  /// User's role (worker or manager)
+  /// User's role (worker, manager, or super_manager)
   @override
   final UserRole role;
 
@@ -265,7 +265,7 @@ abstract class _User extends User {
   @override
   String get email;
 
-  /// User's role (worker or manager)
+  /// User's role (worker, manager, or super_manager)
   @override
   UserRole get role;
 
